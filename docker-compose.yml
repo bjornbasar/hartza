@@ -1,0 +1,57 @@
+services:
+  hartzadb:
+    image: postgres:16-alpine
+    container_name: hartza-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hartza
+      POSTGRES_PASSWORD: hartza
+      POSTGRES_DB: hartza
+    ports:
+      - "5436:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hartza -d hartza"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pgadmin:
+    image: dpage/pgadmin4:8.6
+    container_name: hartza-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@hartza.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - hartzadb
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: hartza-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  hartza-web:
+    build:
+      context: .
+      target: dev
+    container_name: hartza-web
+    working_dir: /app
+    env_file: [.env]
+    ports: ["5127:3000"]
+    volumes:
+      - ./:/app
+      - node-modules:/app/node_modules
+    depends_on:
+      hartzadb:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  node-modules:

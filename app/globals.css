@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Hartza brand helpers */
+:root{
+  --hartza-green:#2E4A3F;
+  --hartza-amber:#E5A823;
+  --hartza-teal:#1CAFBF;
+  --hartza-red:#B71C1C;
+}
+body{ color:#222; background:#F5F6F7; }

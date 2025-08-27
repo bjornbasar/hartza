@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  periodAnchor DateTime?
+  passwordHash String?      // optional for credentials auth
+
+  // Single relation to BudgetItem; filter by type=INCOME/EXPENSE in queries
+  items        BudgetItem[]
+}
+
+enum ItemType {
+  INCOME
+  EXPENSE
+}
+
+enum Frequency {
+  WEEKLY
+  FORTNIGHTLY
+  MONTHLY
+}
+
+model BudgetItem {
+  id              String     @id @default(cuid())
+  user            User       @relation(fields: [userId], references: [id])
+  userId          String
+
+  type            ItemType
+  name            String
+  amountCents     Int
+  frequency       Frequency
+
+  // Frequency-specific
+  weeklyDay       Int?         // 0..6 (Sun..Sat)
+  fortnightAnchor DateTime?    // first occurrence date
+  monthDay        Int?         // 1..31 (29..31 clamp to month end)
+
+  startDate       DateTime     // inclusive
+  endDate         DateTime?    // inclusive
+
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
