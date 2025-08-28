@@ -42,9 +42,6 @@ export default function BitsPage() {
 			<div className="flex items-center justify-between">
 				<h1 className="text-2xl font-bold">Bits (All Transactions)</h1>
 				<div className="flex gap-2">
-					<Link href="/beat" className="px-3 py-2 border rounded">
-						← Back to Beat
-					</Link>
 					<Link
 						href="/bits/new"
 						className="px-3 py-2 border rounded bg-green-600 text-white"

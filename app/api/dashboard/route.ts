@@ -3,18 +3,25 @@ import { NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import {
+  adjustToFridayBeforeIfWeekend,
+  pickMonthDay,
+  moveBoundaryToNextCycle,
+} from "@/lib/dateRules";
 
 const prisma = new PrismaClient();
 
 type Mode = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 type View = "ACTUALS" | "FORECAST";
 
+/* ------------------------------ periods ------------------------------ */
+
 function getPeriod(mode: Mode, offset: number, now = new Date()) {
     const start = new Date(now);
     start.setHours(0, 0, 0, 0);
 
     if (mode === "WEEKLY") {
-        // start of week (Mon)
+        // Monday start
         const day = (start.getDay() + 6) % 7; // 0=Mon
         start.setDate(start.getDate() - day + offset * 7);
         const end = new Date(start);
@@ -23,7 +30,6 @@ function getPeriod(mode: Mode, offset: number, now = new Date()) {
     }
 
     if (mode === "FORTNIGHTLY") {
-        // align to nearest fortnight starting from current week's Monday
         const day = (start.getDay() + 6) % 7;
         const monday = new Date(start);
         monday.setDate(monday.getDate() - day);
@@ -39,6 +45,8 @@ function getPeriod(mode: Mode, offset: number, now = new Date()) {
     return { start: monthStart, end: monthEnd };
 }
 
+/* --------------------------------- API -------------------------------- */
+
 export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) return new Response("Unauthorized", { status: 401 });
@@ -46,7 +54,7 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return new Response("Unauthorized", { status: 401 });
 
-    const { mode, offset = 0, view = "ACTUALS" } = await req.json() as {
+    const { mode, offset = 0, view = "ACTUALS" } = (await req.json()) as {
         mode: Mode; offset: number; view?: View;
     };
 
@@ -60,11 +68,21 @@ export async function POST(req: NextRequest) {
     const openingBalanceCents = openingAgg._sum.amountCents ?? 0;
 
     if (view === "ACTUALS") {
-        // Events are actual transactions in period
-        const txns = await prisma.actualTransaction.findMany({
+        // Fetch actuals in [start, end)
+        const raw = await prisma.actualTransaction.findMany({
             where: { userId: user.id, date: { gte: period.start, lt: period.end } },
             orderBy: { date: "asc" },
         });
+
+        // Apply end-of-cycle attribution for display/totals
+        const txns = raw
+            .map((t) => {
+                const shifted = moveBoundaryToNextCycle(new Date(t.date), period);
+                return { ...t, effectiveDate: shifted };
+            })
+            .filter((t) => t.effectiveDate >= period.start && t.effectiveDate < period.end)
+            .sort((a, b) => +a.effectiveDate - +b.effectiveDate);
+
         const totals = txns.reduce(
             (acc, t) => {
                 if (t.amountCents >= 0) acc.incomeCents += t.amountCents;
@@ -79,11 +97,11 @@ export async function POST(req: NextRequest) {
 
         const events = txns.map((t) => ({
             id: t.id,
-            date: t.date,
+            date: t.effectiveDate, // show the attributed date (may be period.end if last-day)
             name: t.description,
             type: t.amountCents >= 0 ? "INCOME" : "EXPENSE",
             amountCents: Math.abs(t.amountCents),
-            source: "ACTUAL",
+            source: "ACTUAL" as const,
         }));
 
         return Response.json({
@@ -96,7 +114,7 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // FORECAST view: expand BudgetItems to occurrences in the period
+    // FORECAST view: expand BudgetItems to occurrences in the period with EOM + weekend + boundary rules
     const items = await prisma.budgetItem.findMany({
         where: {
             userId: user.id,
@@ -106,37 +124,50 @@ export async function POST(req: NextRequest) {
         },
     });
 
-    // Helper: expand an item into dates within [start, end)
+    // Expand an item into dates within [start, end)
     function* expandOccurrences(item: any, start: Date, end: Date) {
         const s = new Date(Math.max(new Date(item.startDate).getTime(), start.getTime()));
         const until = item.endDate ? new Date(Math.min(new Date(item.endDate).getTime(), end.getTime())) : end;
 
         if (item.frequency === "WEEKLY") {
-            // weeklyDay: 0=Sun..6=Sat
             const first = new Date(s);
-            const want = item.weeklyDay ?? 1;
+            const want = (item.weeklyDay ?? 1) % 7; // 0..6
             while (first.getDay() !== want) first.setDate(first.getDate() + 1);
             for (let d = new Date(first); d < until; d.setDate(d.getDate() + 7)) {
-                yield new Date(d);
+                yield adjustToFridayBeforeIfWeekend(new Date(d));
             }
         } else if (item.frequency === "FORTNIGHTLY") {
-            // fortnightAnchor: 'YYYY-MM-DD' used to align every 14 days
             const anchor = new Date(item.fortnightAnchor ?? item.startDate);
-            // find first occurrence >= s by stepping 14 days
+            anchor.setHours(0, 0, 0, 0);
             const first = new Date(anchor);
             while (first < s) first.setDate(first.getDate() + 14);
             for (let d = new Date(first); d < until; d.setDate(d.getDate() + 14)) {
-                yield new Date(d);
+                yield adjustToFridayBeforeIfWeekend(new Date(d));
             }
         } else if (item.frequency === "MONTHLY") {
-            const day = item.monthDay ?? 1; // 1..31
-            const first = new Date(s.getFullYear(), s.getMonth(), day);
-            if (first < s) first.setMonth(first.getMonth() + 1);
-            for (let d = new Date(first); d < until; d.setMonth(d.getMonth() + 1)) {
-                // clamp to month end if needed (e.g., day 31 on shorter months)
-                const wanted = new Date(d.getFullYear(), d.getMonth(), day);
-                if (wanted.getMonth() === d.getMonth()) yield wanted;
-                else yield new Date(d.getFullYear(), d.getMonth() + 1, 0);
+            const base = item.monthDay ?? 1;
+            // EOM preferences: 31→[31,30,29,28], 30→[30,29,28], 29→[29,28], 28→[28]
+            const preferences =
+                base >= 28 ? Array.from({ length: base - 27 }, (_, i) => base - i) : [base];
+
+            let y = s.getFullYear();
+            let m = s.getMonth();
+            while (true) {
+                const dom =
+                    preferences.length > 1
+                        ? pickMonthDay(y, m, preferences)
+                        : Math.min(preferences[0], new Date(y, m + 1, 0).getDate());
+
+                let occ = new Date(y, m, dom);
+                occ = adjustToFridayBeforeIfWeekend(occ);
+
+                if (occ >= s && occ < until) yield occ;
+
+                // next month
+                m += 1;
+                if (m > 11) { m = 0; y += 1; }
+                const nextMonthStart = new Date(y, m, 1);
+                if (nextMonthStart >= until) break;
             }
         }
     }
@@ -152,35 +183,41 @@ export async function POST(req: NextRequest) {
 
     for (const item of items) {
         for (const when of expandOccurrences(item, period.start, period.end)) {
+            // apply end-of-cycle attribution
+            const effective = moveBoundaryToNextCycle(when, period);
+            if (effective < period.start || effective >= period.end) continue;
+
             forecastEvents.push({
-                id: item.id + "-" + when.toISOString(),
-                date: when,
+                id: item.id + "-" + effective.toISOString(),
+                date: effective,
                 name: item.name,
-                type: item.type, // INCOME | EXPENSE from your existing model
+                type: item.type, // INCOME | EXPENSE from your model
                 amountCents: item.amountCents,
                 source: "FORECAST",
             });
         }
     }
 
-    // Include any future-dated actuals within the period (e.g., scheduled payments already entered)
-    const futureActuals = await prisma.actualTransaction.findMany({
-        where: { userId: user.id, date: { gte: period.start, lt: period.end } },
-        orderBy: { date: "asc" },
-    });
-    for (const t of futureActuals) {
-        forecastEvents.push({
-            id: t.id,
-            date: t.date,
-            name: t.description,
-            type: t.amountCents >= 0 ? "INCOME" : "EXPENSE",
-            amountCents: Math.abs(t.amountCents),
-            source: "ACTUAL",
-        });
-    }
+    // (Optional) merge future-dated actuals if you decide to show them in forecast:
+    // const futureActuals = await prisma.actualTransaction.findMany({
+    //   where: { userId: user.id, date: { gte: period.start, lt: period.end } },
+    //   orderBy: { date: "asc" },
+    // });
+    // for (const t of futureActuals) {
+    //   const effective = moveBoundaryToNextCycle(new Date(t.date), period);
+    //   if (effective < period.start || effective >= period.end) continue;
+    //   forecastEvents.push({
+    //     id: t.id,
+    //     date: effective,
+    //     name: t.description,
+    //     type: t.amountCents >= 0 ? "INCOME" : "EXPENSE",
+    //     amountCents: Math.abs(t.amountCents),
+    //     source: "ACTUAL",
+    //   });
+    // }
 
-    // Totals/closing
-    forecastEvents.sort((a, b) => +new Date(a.date) - +new Date(b.date));
+    forecastEvents.sort((a, b) => +a.date - +b.date);
+
     const totals = forecastEvents.reduce(
         (acc, e) => {
             if (e.type === "INCOME") acc.incomeCents += e.amountCents;

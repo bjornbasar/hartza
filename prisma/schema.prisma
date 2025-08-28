@@ -58,15 +58,22 @@ model BudgetItem {
 model ActualTransaction {
   id          String   @id @default(cuid())
   userId      String
-  date        DateTime // when money actually moved (or will, if future-dated)
-  amountCents Int // credits > 0, debits < 0
+  date        DateTime
+  amountCents Int
   description String
-  category    String? // optional free-text or later FK
-  source      String? // "manual", "import:<bank>", etc.
+  category    String?
+  source      String?   // "manual" | "generated" | "import:<bank>"
+  // ↓↓↓ new
+  isGenerated   Boolean   @default(false)
+  generatedFrom String?   // e.g. "item:<BudgetItem.id>"
+  reconciled    Boolean   @default(false) // when matched to bank feed or confirmed manually
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId, date])
+  // prevents duplicates for the same item+date+amount for a user:
+  @@unique([userId, generatedFrom, date, amountCents])
 }

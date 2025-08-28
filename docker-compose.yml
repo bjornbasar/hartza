@@ -40,5 +40,15 @@ services:
       hartzadb:
         condition: service_healthy
 
+  hartza-cron:
+    image: alpine:3.20
+    volumes:
+      - ./cronjobs:/etc/crontabs/root
+    command: crond -f -L /dev/stdout
+    environment:
+      - CRON_SECRET=${CRON_SECRET}
+    depends_on:
+      - hartza-web
+
 volumes:
   node-modules:

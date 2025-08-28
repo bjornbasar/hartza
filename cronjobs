@@ -1,0 +1,2 @@
+0 0 * * 0 wget -qO- --method=POST --header="x-cron-secret: ${CRON_SECRET}" http://hartza-web:3000/api/admin/run-scheduler >/proc/1/fd/1 2>&1
+0 1 2 * * wget -qO- --method=POST --header="x-cron-secret: ${CRON_SECRET}" http://hartza-web:3000/api/admin/run-retention >/proc/1/fd/1 2>&1

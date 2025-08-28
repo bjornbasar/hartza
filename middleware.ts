@@ -15,6 +15,6 @@ export default withAuth(
 export const config = {
     matcher: [
         // run on all paths except the ones in the negative lookahead
-        "/((?!api/auth|api/register|login|register|_next/static|_next/image|favicon.ico|assets|images|public).*)",
+        "/((?!api/auth|api/register|api/admin/run-scheduler|api/admin/run-retention|login|register|_next/static|_next/image|favicon.ico|assets|images|public).*)",
     ],
 };

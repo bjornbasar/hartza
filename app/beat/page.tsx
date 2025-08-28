@@ -1,6 +1,7 @@
 // app/beat/page.tsx
 "use client";
 import { useEffect, useState } from "react";
+import { CycleTrend } from "../components/CycleTrend";
 
 type Mode = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 type View = "ACTUALS" | "FORECAST";
@@ -27,7 +28,7 @@ export default function BeatPage() {
 		<div className="space-y-4">
 			<h1 className="text-2xl font-bold">Dashboard (Beat)</h1>
 
-			<div className="flex flex-wrap gap-2 items-center">
+			<div className="flex flex-wrap gap-2 items-center filter-selection">
 				<select
 					className="border p-2 rounded"
 					value={mode}
@@ -76,6 +77,8 @@ export default function BeatPage() {
 					</button>
 				</div>
 			</div>
+
+            <CycleTrend mode={mode} view={view} offset={offset} />
 
 			{data && (
 				<div className="space-y-3">
