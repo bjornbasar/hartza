@@ -1,9 +1,11 @@
+// app/beat/page.tsx
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Mode = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 
-export default function Dashboard() {
+export default function BeatPage() {
 	const [mode, setMode] = useState<Mode>("WEEKLY");
 	const [offset, setOffset] = useState(0);
 	const [data, setData] = useState<any>(null);
@@ -21,9 +23,11 @@ export default function Dashboard() {
 	}, [mode, offset]);
 
 	return (
-        
 		<div className="p-6 max-w-4xl mx-auto space-y-4">
-			<h1 className="text-2xl font-bold">Hartza Beats</h1>
+			<div className="flex items-center justify-between">
+				<h1 className="text-2xl font-bold">Dashboard (Beat)</h1>
+			</div>
+
 			<div className="flex gap-2 items-center">
 				<select
 					className="border p-2 rounded"

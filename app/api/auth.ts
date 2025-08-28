@@ -1,1 +1,1 @@
-export { next-auth as default } from "next-auth";
+export { auth as default } from "next-auth";

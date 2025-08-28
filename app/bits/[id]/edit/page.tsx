@@ -1,12 +1,28 @@
+// app/bits/[id]/edit/page.tsx
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
 type ItemType = "INCOME" | "EXPENSE";
 type Frequency = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 
-export default function NewItem() {
+export default function EditBitPage() {
+	const { id } = useParams<{ id: string }>();
+	const [loading, setLoading] = useState(true);
 	const [type, setType] = useState<ItemType>("EXPENSE");
 	const [frequency, setFrequency] = useState<Frequency>("WEEKLY");
+	const [bit, setBit] = useState<any>(null);
+
+	useEffect(() => {
+		(async () => {
+			const res = await fetch(`/api/items/${id}`);
+			const json = await res.json();
+			setBit(json.item);
+			setType(json.item.type);
+			setFrequency(json.item.frequency);
+			setLoading(false);
+		})();
+	}, [id]);
 
 	async function onSubmit(formData: FormData) {
 		const payload: any = {
@@ -24,17 +40,19 @@ export default function NewItem() {
 		if (frequency === "MONTHLY")
 			payload.monthDay = Number(formData.get("monthDay"));
 
-		await fetch("/api/items", {
-			method: "POST",
+		await fetch(`/api/items/${id}`, {
+			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(payload),
 		});
-		window.location.href = "/dashboard";
+		window.location.href = "/bits";
 	}
+
+	if (loading) return <div className="p-6 max-w-xl mx-auto">Loading…</div>;
 
 	return (
 		<form action={onSubmit} className="p-6 max-w-xl mx-auto space-y-4">
-			<h1 className="text-2xl font-bold">Add Item</h1>
+			<h1 className="text-2xl font-bold">Edit Item</h1>
 
 			<div className="flex gap-2">
 				<select
@@ -48,7 +66,7 @@ export default function NewItem() {
 				</select>
 				<input
 					name="name"
-					placeholder="Name"
+					defaultValue={bit.name}
 					className="border p-2 rounded flex-1"
 					required
 				/>
@@ -56,7 +74,7 @@ export default function NewItem() {
 					name="amount"
 					type="number"
 					step="0.01"
-					placeholder="Amount (NZD)"
+					defaultValue={(bit.amountCents / 100).toFixed(2)}
 					className="border p-2 rounded w-40"
 					required
 				/>
@@ -76,21 +94,26 @@ export default function NewItem() {
 				<input
 					type="date"
 					name="startDate"
+					defaultValue={bit.startDate?.slice(0, 10)}
 					className="border p-2 rounded"
 					required
 				/>
 				<input
 					type="date"
 					name="endDate"
+					defaultValue={bit.endDate?.slice(0, 10) ?? ""}
 					className="border p-2 rounded"
-					placeholder="Optional"
 				/>
 			</div>
 
 			{frequency === "WEEKLY" && (
 				<div>
 					<label className="block text-sm">Day of week</label>
-					<select name="weeklyDay" className="border p-2 rounded">
+					<select
+						name="weeklyDay"
+						defaultValue={bit.weeklyDay ?? 1}
+						className="border p-2 rounded"
+					>
 						<option value={1}>Mon</option>
 						<option value={2}>Tue</option>
 						<option value={3}>Wed</option>
@@ -108,6 +131,7 @@ export default function NewItem() {
 					<input
 						type="date"
 						name="fortnightAnchor"
+						defaultValue={bit.fortnightAnchor?.slice(0, 10)}
 						className="border p-2 rounded"
 						required
 					/>
@@ -122,13 +146,14 @@ export default function NewItem() {
 						name="monthDay"
 						min={1}
 						max={31}
+						defaultValue={bit.monthDay ?? 1}
 						className="border p-2 rounded"
 						required
 					/>
 				</div>
 			)}
 
-			<button className="px-4 py-2 border rounded">Save</button>
+			<button className="px-4 py-2 border rounded">Save changes</button>
 		</form>
 	);
 }
