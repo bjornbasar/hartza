@@ -1,13 +1,14 @@
 // app/bits/[id]/edit/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 type ItemType = "INCOME" | "EXPENSE";
 type Frequency = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 
 export default function EditBitPage() {
 	const { id } = useParams<{ id: string }>();
+	const router = useRouter(); // ← add
 	const [loading, setLoading] = useState(true);
 	const [type, setType] = useState<ItemType>("EXPENSE");
 	const [frequency, setFrequency] = useState<Frequency>("WEEKLY");
@@ -45,7 +46,7 @@ export default function EditBitPage() {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(payload),
 		});
-		window.location.href = "/bits";
+		router.push("/bits"); // was window.location.href
 	}
 
 	if (loading) return <div className="p-6 max-w-xl mx-auto">Loading…</div>;
@@ -153,7 +154,20 @@ export default function EditBitPage() {
 				</div>
 			)}
 
-			<button className="px-4 py-2 border rounded">Save changes</button>
+			<div className="flex justify-end gap-2">
+				{" "}
+				{/* ← button group */}
+				<button
+					type="button"
+					onClick={() => router.push("/bits")}
+					className="px-4 py-2 border rounded"
+				>
+					Cancel
+				</button>
+				<button className="px-4 py-2 border rounded bg-green-600 text-white">
+					Save changes
+				</button>
+			</div>
 		</form>
 	);
 }

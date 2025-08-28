@@ -1,34 +1,33 @@
 // app/beat/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 type Mode = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
+type View = "ACTUALS" | "FORECAST";
 
 export default function BeatPage() {
 	const [mode, setMode] = useState<Mode>("WEEKLY");
 	const [offset, setOffset] = useState(0);
+	const [view, setView] = useState<View>("ACTUALS");
 	const [data, setData] = useState<any>(null);
 
 	async function load() {
 		const res = await fetch("/api/dashboard", {
 			method: "POST",
-			body: JSON.stringify({ mode, offset }),
+			body: JSON.stringify({ mode, offset, view }),
 		});
 		const json = await res.json();
 		setData(json);
 	}
 	useEffect(() => {
 		load();
-	}, [mode, offset]);
+	}, [mode, offset, view]);
 
 	return (
-		<div className="p-6 max-w-4xl mx-auto space-y-4">
-			<div className="flex items-center justify-between">
-				<h1 className="text-2xl font-bold">Dashboard (Beat)</h1>
-			</div>
+		<div className="space-y-4">
+			<h1 className="text-2xl font-bold">Dashboard (Beat)</h1>
 
-			<div className="flex gap-2 items-center">
+			<div className="flex flex-wrap gap-2 items-center">
 				<select
 					className="border p-2 rounded"
 					value={mode}
@@ -38,42 +37,69 @@ export default function BeatPage() {
 					<option>FORTNIGHTLY</option>
 					<option>MONTHLY</option>
 				</select>
-				<button
-					className="px-3 py-2 border rounded"
-					onClick={() => setOffset((o) => o - 1)}
-				>
-					◀ Prev
-				</button>
-				<button
-					className="px-3 py-2 border rounded"
-					onClick={() => setOffset(0)}
-				>
-					Today
-				</button>
-				<button
-					className="px-3 py-2 border rounded"
-					onClick={() => setOffset((o) => o + 1)}
-				>
-					Next ▶
-				</button>
+				<div className="ml-2 inline-flex rounded border overflow-hidden">
+					<button
+						className={`px-3 py-2 ${
+							view === "ACTUALS" ? "bg-black text-white" : ""
+						}`}
+						onClick={() => setView("ACTUALS")}
+					>
+						Actuals
+					</button>
+					<button
+						className={`px-3 py-2 ${
+							view === "FORECAST" ? "bg-black text-white" : ""
+						}`}
+						onClick={() => setView("FORECAST")}
+					>
+						Forecast
+					</button>
+				</div>
+				<div className="ml-auto flex gap-2">
+					<button
+						className="px-3 py-2 border rounded"
+						onClick={() => setOffset((o) => o - 1)}
+					>
+						◀ Prev
+					</button>
+					<button
+						className="px-3 py-2 border rounded"
+						onClick={() => setOffset(0)}
+					>
+						Today
+					</button>
+					<button
+						className="px-3 py-2 border rounded"
+						onClick={() => setOffset((o) => o + 1)}
+					>
+						Next ▶
+					</button>
+				</div>
 			</div>
 
 			{data && (
-				<div className="space-y-2">
+				<div className="space-y-3">
 					<div className="text-sm opacity-70">
 						Period: {new Date(data.period.start).toDateString()} —{" "}
 						{new Date(data.period.end).toDateString()}
 					</div>
-					<div className="grid grid-cols-3 gap-3">
+
+					{/* Opening / Totals / Closing */}
+					<div className="grid grid-cols-4 gap-3">
+						<Stat label="Opening" value={cents(data.openingBalanceCents)} />
 						<Stat label="Income" value={cents(data.totals.incomeCents)} />
 						<Stat label="Expenses" value={cents(data.totals.expenseCents)} />
-						<Stat label="Net" value={cents(data.totals.netCents)} />
+						<Stat label="Closing" value={cents(data.closingBalanceCents)} />
 					</div>
+
 					<ul className="divide-y">
 						{data.events.map((e: any) => (
-							<li key={e.id + e.date} className="py-2 flex justify-between">
+							<li key={e.id} className="py-2 flex justify-between">
 								<span>
 									{new Date(e.date).toDateString()} — {e.name}
+									{e.source === "FORECAST" ? (
+										<em className="ml-2 text-xs opacity-60">(forecast)</em>
+									) : null}
 								</span>
 								<span
 									className={
@@ -100,7 +126,6 @@ function Stat({ label, value }: { label: string; value: string }) {
 		</div>
 	);
 }
-
 function cents(n: number) {
 	return (n / 100).toLocaleString(undefined, {
 		style: "currency",

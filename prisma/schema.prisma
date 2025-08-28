@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   name         String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   periodAnchor DateTime?
-  passwordHash String?      // optional for credentials auth
+  passwordHash String? // optional for credentials auth
 
   // Single relation to BudgetItem; filter by type=INCOME/EXPENSE in queries
-  items        BudgetItem[]
+  items             BudgetItem[]
+  transactions ActualTransaction[]
 }
 
 enum ItemType {
@@ -32,24 +33,40 @@ enum Frequency {
 }
 
 model BudgetItem {
-  id              String     @id @default(cuid())
-  user            User       @relation(fields: [userId], references: [id])
-  userId          String
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
 
-  type            ItemType
-  name            String
-  amountCents     Int
-  frequency       Frequency
+  type        ItemType
+  name        String
+  amountCents Int
+  frequency   Frequency
 
   // Frequency-specific
-  weeklyDay       Int?         // 0..6 (Sun..Sat)
-  fortnightAnchor DateTime?    // first occurrence date
-  monthDay        Int?         // 1..31 (29..31 clamp to month end)
+  weeklyDay       Int? // 0..6 (Sun..Sat)
+  fortnightAnchor DateTime? // first occurrence date
+  monthDay        Int? // 1..31 (29..31 clamp to month end)
 
-  startDate       DateTime     // inclusive
-  endDate         DateTime?    // inclusive
+  startDate DateTime // inclusive
+  endDate   DateTime? // inclusive
 
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActualTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  date        DateTime // when money actually moved (or will, if future-dated)
+  amountCents Int // credits > 0, debits < 0
+  description String
+  category    String? // optional free-text or later FK
+  source      String? // "manual", "import:<bank>", etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
 }
