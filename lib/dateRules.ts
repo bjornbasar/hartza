@@ -9,6 +9,15 @@ export function adjustToFridayBeforeIfWeekend(d: Date) {
   return out;
 }
 
+export function maybeAdjustWeekend(d: Date, policy: "FRIDAY_BEFORE" | "AS_IS" ="AS_IS") {
+  if (policy === "AS_IS") return d;
+  const out = new Date(d);
+  const dow = out.getDay(); // 0=Sun..6=Sat
+  if (dow === 6) out.setDate(out.getDate() - 1);
+  else if (dow === 0) out.setDate(out.getDate() - 2);
+  return out;
+}
+
 /** Returns the last valid DOM for a month given preferences like [31,30,29,28] */
 export function pickMonthDay(year: number, monthZero: number, preferences: number[]) {
   const lastDay = new Date(year, monthZero + 1, 0).getDate(); // 28..31

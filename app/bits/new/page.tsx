@@ -17,6 +17,7 @@ export default function NewBitPage() {
 			frequency,
 			startDate: String(formData.get("startDate")),
 			endDate: String(formData.get("endDate")) || null,
+			weekendPolicy: String(formData.get("weekendPolicy") || "FRIDAY_BEFORE"),
 		};
 		if (frequency === "WEEKLY")
 			payload.weeklyDay = Number(formData.get("weeklyDay"));
@@ -86,6 +87,16 @@ export default function NewBitPage() {
 					className="border p-2 rounded"
 					placeholder="Optional"
 				/>
+			</div>
+			<div>
+				<select
+					name="weekendPolicy"
+					className="border p-2 rounded"
+					defaultValue="FRIDAY_BEFORE"
+				>
+					<option value="FRIDAY_BEFORE">Shift weekends to Friday</option>
+					<option value="AS_IS">Keep exact day (incl. weekends)</option>
+				</select>
 			</div>
 
 			{frequency === "WEEKLY" && (

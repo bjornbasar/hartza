@@ -4,9 +4,9 @@ import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
-  adjustToFridayBeforeIfWeekend,
-  pickMonthDay,
-  moveBoundaryToNextCycle,
+    pickMonthDay,
+    maybeAdjustWeekend,
+    moveBoundaryToNextCycle,
 } from "@/lib/dateRules";
 
 const prisma = new PrismaClient();
@@ -45,6 +45,22 @@ function getPeriod(mode: Mode, offset: number, now = new Date()) {
     return { start: monthStart, end: monthEnd };
 }
 
+/* --------------------------- look-back logic --------------------------- */
+
+// ★ Include a small look-back so boundary-shifted items from the previous
+//   cycle can slide into *this* cycle.
+function lookbackDaysFor(mode: Mode) {
+    // 1 day is enough for weekly/fortnightly boundary (last day -> next start).
+    // Monthly can need a couple days for EOM weekend adjustments; be generous.
+    return mode === "MONTHLY" ? 3 : 1;
+}
+
+function withLookback(period: { start: Date; end: Date }, days: number) {
+    const lb = new Date(period.start);
+    lb.setDate(lb.getDate() - days);
+    return { start: lb, end: period.end };
+}
+
 /* --------------------------------- API -------------------------------- */
 
 export async function POST(req: NextRequest) {
@@ -67,14 +83,17 @@ export async function POST(req: NextRequest) {
     });
     const openingBalanceCents = openingAgg._sum.amountCents ?? 0;
 
+    /* ------------------------------ ACTUALS ------------------------------ */
+
     if (view === "ACTUALS") {
-        // Fetch actuals in [start, end)
+        // ★ fetch with look-back window
+        const lb = withLookback(period, lookbackDaysFor(mode));
         const raw = await prisma.actualTransaction.findMany({
-            where: { userId: user.id, date: { gte: period.start, lt: period.end } },
+            where: { userId: user.id, date: { gte: lb.start, lt: lb.end } },
             orderBy: { date: "asc" },
         });
 
-        // Apply end-of-cycle attribution for display/totals
+        // apply boundary attribution, then keep only those that land in [period.start, period.end)
         const txns = raw
             .map((t) => {
                 const shifted = moveBoundaryToNextCycle(new Date(t.date), period);
@@ -97,7 +116,7 @@ export async function POST(req: NextRequest) {
 
         const events = txns.map((t) => ({
             id: t.id,
-            date: t.effectiveDate, // show the attributed date (may be period.end if last-day)
+            date: t.effectiveDate, // show the attributed date (may be period.end)
             name: t.description,
             type: t.amountCents >= 0 ? "INCOME" : "EXPENSE",
             amountCents: Math.abs(t.amountCents),
@@ -114,7 +133,9 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // FORECAST view: expand BudgetItems to occurrences in the period with EOM + weekend + boundary rules
+    /* ----------------------------- FORECAST ------------------------------ */
+
+    // Expand BudgetItems with EOM + weekend rules
     const items = await prisma.budgetItem.findMany({
         where: {
             userId: user.id,
@@ -124,7 +145,10 @@ export async function POST(req: NextRequest) {
         },
     });
 
-    // Expand an item into dates within [start, end)
+    // ★ expand with look-back so that last-day occurrences from the previous cycle
+    //   (that move to this period) are considered.
+    const expandWindow = withLookback(period, lookbackDaysFor(mode));
+
     function* expandOccurrences(item: any, start: Date, end: Date) {
         const s = new Date(Math.max(new Date(item.startDate).getTime(), start.getTime()));
         const until = item.endDate ? new Date(Math.min(new Date(item.endDate).getTime(), end.getTime())) : end;
@@ -134,7 +158,7 @@ export async function POST(req: NextRequest) {
             const want = (item.weeklyDay ?? 1) % 7; // 0..6
             while (first.getDay() !== want) first.setDate(first.getDate() + 1);
             for (let d = new Date(first); d < until; d.setDate(d.getDate() + 7)) {
-                yield adjustToFridayBeforeIfWeekend(new Date(d));
+                yield maybeAdjustWeekend(new Date(d));
             }
         } else if (item.frequency === "FORTNIGHTLY") {
             const anchor = new Date(item.fortnightAnchor ?? item.startDate);
@@ -142,7 +166,7 @@ export async function POST(req: NextRequest) {
             const first = new Date(anchor);
             while (first < s) first.setDate(first.getDate() + 14);
             for (let d = new Date(first); d < until; d.setDate(d.getDate() + 14)) {
-                yield adjustToFridayBeforeIfWeekend(new Date(d));
+                yield maybeAdjustWeekend(new Date(d));
             }
         } else if (item.frequency === "MONTHLY") {
             const base = item.monthDay ?? 1;
@@ -159,7 +183,7 @@ export async function POST(req: NextRequest) {
                         : Math.min(preferences[0], new Date(y, m + 1, 0).getDate());
 
                 let occ = new Date(y, m, dom);
-                occ = adjustToFridayBeforeIfWeekend(occ);
+                occ = maybeAdjustWeekend(occ);
 
                 if (occ >= s && occ < until) yield occ;
 
@@ -182,39 +206,25 @@ export async function POST(req: NextRequest) {
     }> = [];
 
     for (const item of items) {
-        for (const when of expandOccurrences(item, period.start, period.end)) {
-            // apply end-of-cycle attribution
+        console.log("Expanding item", item.id, item.name, expandWindow);
+        for (const when of expandOccurrences(item, expandWindow.start, expandWindow.end)) {
             const effective = moveBoundaryToNextCycle(when, period);
-            if (effective < period.start || effective >= period.end) continue;
+            // keep only those that end up in THIS period after boundary rule
+            if (effective < expandWindow.start || effective >= expandWindow.end) continue;
 
             forecastEvents.push({
                 id: item.id + "-" + effective.toISOString(),
                 date: effective,
                 name: item.name,
-                type: item.type, // INCOME | EXPENSE from your model
+                type: item.type,
                 amountCents: item.amountCents,
                 source: "FORECAST",
             });
         }
     }
 
-    // (Optional) merge future-dated actuals if you decide to show them in forecast:
-    // const futureActuals = await prisma.actualTransaction.findMany({
-    //   where: { userId: user.id, date: { gte: period.start, lt: period.end } },
-    //   orderBy: { date: "asc" },
-    // });
-    // for (const t of futureActuals) {
-    //   const effective = moveBoundaryToNextCycle(new Date(t.date), period);
-    //   if (effective < period.start || effective >= period.end) continue;
-    //   forecastEvents.push({
-    //     id: t.id,
-    //     date: effective,
-    //     name: t.description,
-    //     type: t.amountCents >= 0 ? "INCOME" : "EXPENSE",
-    //     amountCents: Math.abs(t.amountCents),
-    //     source: "ACTUAL",
-    //   });
-    // }
+    // (Optional) also include future-dated actuals in the same expandWindow if desired.
+    // Then apply moveBoundaryToNextCycle and the same [start,end) filter.
 
     forecastEvents.sort((a, b) => +a.date - +b.date);
 

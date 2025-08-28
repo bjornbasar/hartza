@@ -1,11 +1,11 @@
 // lib/scheduler.ts
 import { PrismaClient, BudgetItem, Frequency } from "@prisma/client";
 import {
-  adjustToFridayBeforeIfWeekend,
   pickMonthDay,
   periodFor,
   moveBoundaryToNextCycle,
   periodBounds,
+  maybeAdjustWeekend,
 } from "@/lib/dateRules";
 
 export const prisma = new PrismaClient();
@@ -23,7 +23,7 @@ function* expandWeekly(item: BudgetItem, start: Date, end: Date): Generator<Date
     while (first.getDay() !== want) first.setDate(first.getDate() + 1);
 
     for (let d = new Date(first); d < until; d.setDate(d.getDate() + 7)) {
-        yield adjustToFridayBeforeIfWeekend(d);
+        yield maybeAdjustWeekend(d);
     }
 }
 
@@ -38,7 +38,7 @@ function* expandFortnightly(item: BudgetItem, start: Date, end: Date): Generator
     while (first < s) first.setDate(first.getDate() + 14);
 
     for (let d = new Date(first); d < until; d.setDate(d.getDate() + 14)) {
-        yield adjustToFridayBeforeIfWeekend(d);
+        yield maybeAdjustWeekend(d);
     }
 }
 
@@ -65,7 +65,7 @@ function* expandMonthly(item: BudgetItem, start: Date, end: Date): Generator<Dat
                 : Math.min(preferences[0], lastDay);
 
         let occ = new Date(y, m, dom);
-        occ = adjustToFridayBeforeIfWeekend(occ);
+        occ = maybeAdjustWeekend(occ);
 
         if (occ >= s && occ < until) yield occ;
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const frequencyEnum = z.enum(["WEEKLY", "FORTNIGHTLY", "MONTHLY"]);
+export const weekendPolicyEnum = z.enum(["FRIDAY_BEFORE", "AS_IS"]);
 
 export const budgetItemSchema = z.object({
     id: z.string().cuid().optional(),
@@ -13,6 +14,7 @@ export const budgetItemSchema = z.object({
     monthDay: z.number().int().min(1).max(31).optional(),
     startDate: z.coerce.date(),
     endDate: z.coerce.date().nullish(),
+    weekendPolicy: weekendPolicyEnum.default("FRIDAY_BEFORE"),
 }).superRefine((data, ctx) => {
     if (data.frequency === "WEEKLY" && data.weeklyDay === undefined) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "weeklyDay is required for WEEKLY" });
@@ -24,3 +26,5 @@ export const budgetItemSchema = z.object({
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "monthDay is required for MONTHLY" });
     }
 });
+
+export type BudgetItemInput = z.infer<typeof budgetItemSchema>;
