@@ -7,4 +7,11 @@
   --hartza-teal:#1CAFBF;
   --hartza-red:#B71C1C;
 }
-body{ color:#222; background:#F5F6F7; }
+body{ 
+    color:#222; 
+    background: linear-gradient(to bottom right, var(--hartza-teal), #EEEEEE); 
+}
+
+button {
+    cursor: pointer;
+}

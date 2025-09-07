@@ -30,7 +30,7 @@ export default function BeatPage() {
 
 			<div className="flex flex-wrap gap-2 items-center filter-selection">
 				<select
-					className="border p-2 rounded"
+					className="border p-2 rounded cursor-pointer"
 					value={mode}
 					onChange={(e) => setMode(e.target.value as Mode)}
 				>
@@ -61,7 +61,7 @@ export default function BeatPage() {
 						className="px-3 py-2 border rounded"
 						onClick={() => setOffset((o) => o - 1)}
 					>
-						◀ Prev
+						{"< Prev"}
 					</button>
 					<button
 						className="px-3 py-2 border rounded"
@@ -73,12 +73,12 @@ export default function BeatPage() {
 						className="px-3 py-2 border rounded"
 						onClick={() => setOffset((o) => o + 1)}
 					>
-						Next ▶
+						{"Next >"}
 					</button>
 				</div>
 			</div>
 
-            <CycleTrend mode={mode} view={view} offset={offset} />
+			<CycleTrend mode={mode} view={view} offset={offset} />
 
 			{data && (
 				<div className="space-y-3">

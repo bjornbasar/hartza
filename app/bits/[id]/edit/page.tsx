@@ -107,6 +107,17 @@ export default function EditBitPage() {
 				/>
 			</div>
 
+			<div>
+				<select
+					name="weekendPolicy"
+					className="border p-2 rounded"
+					defaultValue="FRIDAY_BEFORE"
+				>
+					<option value="FRIDAY_BEFORE">Shift weekends to Friday</option>
+					<option value="AS_IS">Keep exact day (incl. weekends)</option>
+				</select>
+			</div>
+
 			{frequency === "WEEKLY" && (
 				<div>
 					<label className="block text-sm">Day of week</label>
