@@ -1,9 +1,9 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 ENV CI=true
 
 FROM base AS deps
-RUN apk add --no-cache libc6-compat python3 make g++ openssl
+RUN apk add --no-cache curl g++ libc6-compat make openssl python3
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts; \
     elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
