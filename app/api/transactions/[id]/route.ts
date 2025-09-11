@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 const prisma = new PrismaClient();
 
@@ -18,6 +18,9 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 
     const tx = await prisma.actualTransaction.findFirst({
         where: { id: params.id, userId: user.id },
+        include: {
+            budgetItem: true,
+        },
     });
     if (!tx) return new Response("Not found", { status: 404 });
     return Response.json({ transaction: tx });
@@ -33,7 +36,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!existing) return new Response("Not found", { status: 404 });
 
     const body = await req.json();
-    const { date, amountCents, description, category, source } = body;
+    const { date, amountCents, description, category, source, isAllocated, budgetItemId, isOnTheDay } = body;
+
+    // If budgetItemId is provided, validate it belongs to the user
+    if (budgetItemId && budgetItemId !== existing.budgetItemId) {
+        const budgetItem = await prisma.budgetItem.findFirst({
+            where: { id: budgetItemId, userId: user.id }
+        });
+        if (!budgetItem) {
+            return new Response("Invalid budget item", { status: 400 });
+        }
+    }
 
     const updated = await prisma.actualTransaction.update({
         where: { id: params.id },
@@ -43,6 +56,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             ...(description ? { description } : {}),
             category: category ?? existing.category ?? null,
             source: source ?? existing.source ?? "manual",
+            ...(typeof isAllocated === "boolean" ? { isAllocated } : {}),
+            ...(budgetItemId !== undefined ? { budgetItemId } : {}),
+            ...(typeof isOnTheDay === "boolean" ? { isOnTheDay } : {}),
         },
     });
     return Response.json({ transaction: updated });

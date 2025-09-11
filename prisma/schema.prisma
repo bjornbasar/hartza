@@ -36,12 +36,14 @@ model BudgetItem {
   startDate DateTime
   endDate   DateTime?
 
-  // NEW:
   weekendPolicy WeekendPolicy @default(FRIDAY_BEFORE)
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // NEW: Relationship to allocated transactions
+  allocatedTransactions ActualTransaction[]
 }
 
 model ActualTransaction {
@@ -59,8 +61,16 @@ model ActualTransaction {
   reconciled    Boolean  @default(false)
   user          User     @relation(fields: [userId], references: [id])
 
+  // NEW: Allocation and budget tracking
+  isAllocated   Boolean  @default(false)
+  budgetItemId  String?
+  isOnTheDay    Boolean  @default(false)  // out-of-budget transactions
+  budgetItem    BudgetItem? @relation(fields: [budgetItemId], references: [id])
+
   @@unique([userId, generatedFrom, date, amountCents])
   @@index([userId, date])
+  @@index([userId, isAllocated])
+  @@index([userId, isOnTheDay])
 }
 
 enum ItemType {

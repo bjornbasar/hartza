@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { budgetItemSchema } from "@/lib/schemas";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 // (optional) prisma singleton to avoid hot-reload issues in dev
 const globalForPrisma = global as unknown as { prisma?: PrismaClient };

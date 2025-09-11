@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/app/api/items/route"; // reuse singleton
 import { budgetItemSchema } from "@/lib/schemas";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 async function requireUser() {
     const session = await getServerSession(authOptions);

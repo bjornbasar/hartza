@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 import { LogoutButton } from "./components/LogoutButton";
 import Navbar from "./components/Navbar";

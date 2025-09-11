@@ -2,12 +2,12 @@
 import { NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
     pickMonthDay,
     maybeAdjustWeekend,
     moveBoundaryToNextCycle,
 } from "@/lib/dateRules";
+import { authOptions } from "@/lib/auth";
 
 const prisma = new PrismaClient();
 
@@ -107,10 +107,30 @@ export async function POST(req: NextRequest) {
                 if (t.amountCents >= 0) acc.incomeCents += t.amountCents;
                 else acc.expenseCents += Math.abs(t.amountCents);
                 acc.netCents += t.amountCents;
+                
+                // Track allocation status
+                if (t.isAllocated) {
+                    acc.allocatedCents += Math.abs(t.amountCents);
+                } else if (t.isOnTheDay) {
+                    acc.onTheDayCents += Math.abs(t.amountCents);
+                } else {
+                    acc.unallocatedCents += Math.abs(t.amountCents);
+                }
+                
                 return acc;
             },
-            { incomeCents: 0, expenseCents: 0, netCents: 0 }
+            { 
+                incomeCents: 0, 
+                expenseCents: 0, 
+                netCents: 0,
+                allocatedCents: 0,
+                unallocatedCents: 0,
+                onTheDayCents: 0
+            }
         );
+
+        // Calculate remaining balance after allocated items
+        const remainingBalanceCents = openingBalanceCents + totals.incomeCents - totals.allocatedCents - totals.onTheDayCents;
 
         const closingBalanceCents = openingBalanceCents + totals.netCents;
 
@@ -121,12 +141,16 @@ export async function POST(req: NextRequest) {
             type: t.amountCents >= 0 ? "INCOME" : "EXPENSE",
             amountCents: Math.abs(t.amountCents),
             source: "ACTUAL" as const,
+            isAllocated: t.isAllocated,
+            isOnTheDay: t.isOnTheDay,
+            budgetItemId: t.budgetItemId,
         }));
 
         return Response.json({
             period,
             openingBalanceCents,
             closingBalanceCents,
+            remainingBalanceCents,
             totals,
             events,
             view,

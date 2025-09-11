@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 
 const prisma = new PrismaClient();
 
@@ -30,6 +30,9 @@ export async function GET(req: NextRequest) {
 
     const transactions = await prisma.actualTransaction.findMany({
         where,
+        include: {
+            budgetItem: true,
+        },
         orderBy: { date: "desc" },
     });
     return Response.json({ transactions });
@@ -41,9 +44,19 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     // Minimal validation (use Zod if you like):
-    const { date, amountCents, description, category, source } = body;
+    const { date, amountCents, description, category, source, isAllocated, budgetItemId, isOnTheDay } = body;
     if (!date || typeof amountCents !== "number" || !description) {
         return new Response("Invalid payload", { status: 400 });
+    }
+
+    // If budgetItemId is provided, validate it belongs to the user
+    if (budgetItemId) {
+        const budgetItem = await prisma.budgetItem.findFirst({
+            where: { id: budgetItemId, userId: user.id }
+        });
+        if (!budgetItem) {
+            return new Response("Invalid budget item", { status: 400 });
+        }
     }
 
     const tx = await prisma.actualTransaction.create({
@@ -54,6 +67,9 @@ export async function POST(req: NextRequest) {
             description,
             category: category ?? null,
             source: source ?? "manual",
+            isAllocated: isAllocated ?? false,
+            budgetItemId: budgetItemId ?? null,
+            isOnTheDay: isOnTheDay ?? false,
         },
     });
     return Response.json({ transaction: tx }, { status: 201 });
