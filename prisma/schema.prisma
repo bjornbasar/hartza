@@ -8,15 +8,18 @@ datasource db {
 }
 
 model User {
-  id           String              @id @default(cuid())
-  email        String              @unique
-  name         String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  periodAnchor DateTime?
-  passwordHash String?
-  items        BudgetItem[]
-  transactions ActualTransaction[]
+  id                String              @id @default(cuid())
+  email             String              @unique
+  name              String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  periodAnchor      DateTime?
+  passwordHash      String?
+  items             BudgetItem[]
+  transactions      Transaction[]
+  savingsGoals      SavingsGoal[]
+  monthlyBudgets    MonthlyBudget[]
+  ActualTransaction ActualTransaction[]
 }
 
 model BudgetItem {
@@ -46,6 +49,62 @@ model BudgetItem {
   allocatedTransactions ActualTransaction[]
 }
 
+// Simplified transaction model for the new UX
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  date        DateTime
+  amountCents Int // Positive for income, negative for expenses
+  description String
+  category    String?
+  type        TransactionType
+  source      String?         @default("MANUAL")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  user        User            @relation(fields: [userId], references: [id])
+
+  // Auto-categorization support
+  isAutoCategorizationConfirmed Boolean @default(false)
+
+  @@index([userId, date])
+  @@index([userId, type])
+  @@index([userId, category])
+}
+
+// New savings goal model  
+model SavingsGoal {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  targetCents  Int
+  currentCents Int       @default(0)
+  targetDate   DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, isActive])
+}
+
+// Monthly budget tracking
+model MonthlyBudget {
+  id           String   @id @default(cuid())
+  userId       String
+  year         Int
+  month        Int // 1-12
+  incomeCents  Int      @default(0)
+  expenseCents Int      @default(0)
+  savingsCents Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, year, month])
+  @@index([userId, year, month])
+}
+
+// Legacy model - keep for migration
 model ActualTransaction {
   id            String   @id @default(cuid())
   userId        String
@@ -62,10 +121,10 @@ model ActualTransaction {
   user          User     @relation(fields: [userId], references: [id])
 
   // NEW: Allocation and budget tracking
-  isAllocated   Boolean  @default(false)
-  budgetItemId  String?
-  isOnTheDay    Boolean  @default(false)  // out-of-budget transactions
-  budgetItem    BudgetItem? @relation(fields: [budgetItemId], references: [id])
+  isAllocated  Boolean     @default(false)
+  budgetItemId String?
+  isOnTheDay   Boolean     @default(false) // out-of-budget transactions
+  budgetItem   BudgetItem? @relation(fields: [budgetItemId], references: [id])
 
   @@unique([userId, generatedFrom, date, amountCents])
   @@index([userId, date])
@@ -78,6 +137,11 @@ enum ItemType {
   EXPENSE
 }
 
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
 enum Frequency {
   WEEKLY
   FORTNIGHTLY
@@ -85,6 +149,6 @@ enum Frequency {
 }
 
 enum WeekendPolicy {
-  FRIDAY_BEFORE   // move Sat/Sun to previous Friday  (current behavior)
-  AS_IS           // keep the exact calendar day (allow Saturday/Sunday)
+  FRIDAY_BEFORE // move Sat/Sun to previous Friday  (current behavior)
+  AS_IS // keep the exact calendar day (allow Saturday/Sunday)
 }

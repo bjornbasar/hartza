@@ -14,13 +14,14 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hartza -d hartza"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 20
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
     container_name: hartza-mailhog
     restart: always
+    profiles: ["optional"]
     ports:
       - "1025:1025"
       - "8025:8025"
@@ -32,27 +33,37 @@ services:
 
   hartza-web:
     build:
-      context: .
+      context: .          # you're already running compose ON Hurska in the NFS mount — good
       target: dev
+      # If Hurska is Pi 3, uncomment:
+      # platform: "linux/arm/v7"
     container_name: hartza-web
     working_dir: /app
     env_file: [.env]
+    environment:
+      CHOKIDAR_USEPOLLING: "1"
+      WATCHPACK_POLLING: "true"
     ports: ["5127:3000"]
     restart: always
     volumes:
-      - ./:/app
-      - node-modules:/app/node_modules
+      - ./:/app                         # NFS-mounted source
+      - node-modules:/app/node_modules  # keep deps internal
+      # Optional caches (pick what your framework uses):
+      - next-cache:/app/.next
+      - vite-cache:/app/node_modules/.vite
+      - npm-cache:/root/.npm
     depends_on:
       hartzadb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
 
   hartza-cron:
     image: alpine:3.20
+    container_name: hartza-cron
     volumes:
       - ./cronjobs:/etc/crontabs/root
     command: crond -f -L /dev/stdout
@@ -69,3 +80,7 @@ services:
 
 volumes:
   node-modules:
+  next-cache:
+  vite-cache:
+  npm-cache:
+

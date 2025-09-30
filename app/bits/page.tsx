@@ -40,7 +40,7 @@ export default function BitsPage() {
 	return (
 		<div className="p-6 max-w-3xl mx-auto">
 			<div className="flex items-center justify-between">
-				<h1 className="text-2xl font-bold">Bits (All Transactions)</h1>
+				<h1 className="text-2xl font-bold">Bits (Transactions)</h1>
 				<div className="flex gap-2">
 					<Link
 						href="/bits/new"
