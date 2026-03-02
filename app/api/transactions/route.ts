@@ -1,76 +1,51 @@
-// app/api/transactions/route.ts
-import { NextRequest } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
 
-const prisma = new PrismaClient();
+const schema = z.object({
+  amount: z.number().positive(),
+  date: z.string(),
+  description: z.string().nullable().optional(),
+  budgetItemId: z.string().min(1),
+})
 
-async function requireUser() {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) return null;
-    return prisma.user.findUnique({ where: { email: session.user.email } });
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const budgetItemId = searchParams.get('budgetItemId')
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
+
+  const where: Record<string, unknown> = {}
+  if (budgetItemId) where.budgetItemId = budgetItemId
+  if (from || to) {
+    where.date = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(to) } : {}),
+    }
+  }
+
+  const items = await prisma.transaction.findMany({
+    where,
+    include: { budgetItem: { select: { id: true, name: true, category: true } } },
+    orderBy: { date: 'desc' },
+  })
+
+  return NextResponse.json(items)
 }
 
-export async function GET(req: NextRequest) {
-    const user = await requireUser();
-    if (!user) return new Response("Unauthorized", { status: 401 });
+export async function POST(req: Request) {
+  const body = await req.json()
+  const data = schema.parse(body)
 
-    // optional query params: ?from=YYYY-MM-DD&to=YYYY-MM-DD
-    const { searchParams } = new URL(req.url);
-    const from = searchParams.get("from");
-    const to = searchParams.get("to");
+  const item = await prisma.transaction.create({
+    data: {
+      amount: data.amount,
+      date: new Date(data.date),
+      description: data.description ?? null,
+      budgetItemId: data.budgetItemId,
+    },
+    include: { budgetItem: { select: { id: true, name: true, category: true } } },
+  })
 
-    const where: any = { userId: user.id };
-    if (from || to) {
-        where.date = {};
-        if (from) where.date.gte = new Date(from);
-        if (to) where.date.lt = new Date(to); // end-exclusive
-    }
-
-    const transactions = await prisma.actualTransaction.findMany({
-        where,
-        include: {
-            budgetItem: true,
-        },
-        orderBy: { date: "desc" },
-    });
-    return Response.json({ transactions });
-}
-
-export async function POST(req: NextRequest) {
-    const user = await requireUser();
-    if (!user) return new Response("Unauthorized", { status: 401 });
-
-    const body = await req.json();
-    // Minimal validation (use Zod if you like):
-    const { date, amountCents, description, category, source, isAllocated, budgetItemId, isOnTheDay } = body;
-    if (!date || typeof amountCents !== "number" || !description) {
-        return new Response("Invalid payload", { status: 400 });
-    }
-
-    // If budgetItemId is provided, validate it belongs to the user
-    if (budgetItemId) {
-        const budgetItem = await prisma.budgetItem.findFirst({
-            where: { id: budgetItemId, userId: user.id }
-        });
-        if (!budgetItem) {
-            return new Response("Invalid budget item", { status: 400 });
-        }
-    }
-
-    const tx = await prisma.actualTransaction.create({
-        data: {
-            userId: user.id,
-            date: new Date(date),
-            amountCents: Math.trunc(amountCents), // signed
-            description,
-            category: category ?? null,
-            source: source ?? "manual",
-            isAllocated: isAllocated ?? false,
-            budgetItemId: budgetItemId ?? null,
-            isOnTheDay: isOnTheDay ?? false,
-        },
-    });
-    return Response.json({ transaction: tx }, { status: 201 });
+  return NextResponse.json(item, { status: 201 })
 }

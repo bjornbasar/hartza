@@ -1,0 +1,73 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentPeriod, toMonthly, isActiveOn } from '@/lib/budget'
+import { Frequency } from '@prisma/client'
+import { format } from 'date-fns'
+
+export async function GET() {
+  const now = new Date()
+
+  // --- Income ---
+  const incomes = await prisma.income.findMany({ where: { active: true } })
+
+  let monthlyIncome = 0
+  for (const inc of incomes) {
+    if (!isActiveOn(inc.startDate, inc.endDate, now)) continue
+    monthlyIncome += toMonthly(inc.amount, inc.frequency as Frequency)
+  }
+
+  // --- Budget items with current-period spend ---
+  const budgetItems = await prisma.budgetItem.findMany({
+    where: { active: true },
+    include: { transactions: true },
+  })
+
+  let monthlyBudget = 0
+  const itemSummaries = []
+
+  for (const item of budgetItems) {
+    const freq = item.frequency as Frequency
+    if (!isActiveOn(item.startDate, item.endDate, now)) continue
+
+    monthlyBudget += toMonthly(item.amount, freq)
+
+    const period = getCurrentPeriod(freq, item.startDate, now)
+
+    // Sum transactions within the current period
+    const periodTransactions = item.transactions.filter((t) => {
+      const d = t.date
+      return d >= period.start && d <= period.end
+    })
+
+    const spent = periodTransactions.reduce((s, t) => s + t.amount, 0)
+    const remaining = item.amount - spent
+    const percentUsed = item.amount > 0 ? Math.min((spent / item.amount) * 100, 100) : 0
+
+    itemSummaries.push({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      frequency: freq,
+      amount: item.amount,
+      periodStart: format(period.start, 'yyyy-MM-dd'),
+      periodEnd: format(period.end, 'yyyy-MM-dd'),
+      spent: Math.round(spent * 100) / 100,
+      remaining: Math.round(remaining * 100) / 100,
+      percentUsed: Math.round(percentUsed * 10) / 10,
+      isOverBudget: spent > item.amount,
+    })
+  }
+
+  // Sort: over-budget first, then by percent used descending
+  itemSummaries.sort((a, b) => {
+    if (a.isOverBudget !== b.isOverBudget) return a.isOverBudget ? -1 : 1
+    return b.percentUsed - a.percentUsed
+  })
+
+  return NextResponse.json({
+    monthlyIncome: Math.round(monthlyIncome * 100) / 100,
+    monthlyBudget: Math.round(monthlyBudget * 100) / 100,
+    monthlySurplus: Math.round((monthlyIncome - monthlyBudget) * 100) / 100,
+    budgetItems: itemSummaries,
+  })
+}

@@ -61,22 +61,6 @@ services:
       timeout: 10s
       retries: 5
 
-  hartza-cron:
-    image: alpine:3.20
-    container_name: hartza-cron
-    volumes:
-      - ./cronjobs:/etc/crontabs/root
-    command: crond -f -L /dev/stdout
-    restart: always
-    environment:
-      - CRON_SECRET=${CRON_SECRET}
-    depends_on:
-      - hartza-web
-    healthcheck:
-      test: ["CMD", "pgrep", "crond"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
 
 volumes:
   node-modules:

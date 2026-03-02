@@ -1,57 +1,66 @@
-import { ReactNode } from "react";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+'use client'
 
-import { LogoutButton } from "./components/LogoutButton";
-import Navbar from "./components/Navbar";
-import "./globals.css";
+import './globals.css'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import Image from 'next/image'
 
-export const metadata = {
-	title: "Hartza",
-	description: "Little bits, in rhythm to savings",
-	openGraph: {
-		title: "Hartza",
-		description: "Little bits, in rhythm to savings",
-		images: ["images/app_icon_1024x1024.png"],
-	},
-	icons: {
-		icon: "images/favicon.ico",
-		shortcut: "images/favicon.ico",
-		apple: "images/hartza-logo.png",
-	},
-	manifest: "/manifest.webmanifest",
-};
+const nav = [
+  { href: '/', label: 'Dashboard', icon: '◈' },
+  { href: '/income', label: 'Income', icon: '↑' },
+  { href: '/budget', label: 'Budget', icon: '◉' },
+  { href: '/transactions', label: 'Transactions', icon: '↔' },
+]
 
-export default async function RootLayout({
-	children,
-}: {
-	children: ReactNode;
-}) {
-	// check session server-side
-	const session = await getServerSession(authOptions);
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
 
-	return (
-		<html lang="en">
-			<body className="min-h-screen">
-				{session && (
-					<header className="px-6 py-4 bg-white border-b">
-						<div className="max-w-6xl mx-auto flex items-center gap-3 bg-white rounded-lg p-6 text-black shadow">
-							<img
-								src="/images/inline-logo.png"
-								alt="Hartza"
-								className="w-80 cursor-pointer"
-							/>
-							<div className="ml-auto flex items-center gap-4">
-								<Navbar />
-								<LogoutButton />
-							</div>
-						</div>
-					</header>
-				)}
-				<main className="max-w-6xl mx-auto p-6 bg-gray-100/60 m-2 rounded-lg">
-					{children}
-				</main>
-			</body>
-		</html>
-	);
+  return (
+    <html lang="en">
+      <body className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside className="w-56 shrink-0 flex flex-col bg-slate-900 border-r border-slate-800">
+          <div className="px-5 py-6 border-b border-slate-800">
+            <Image
+              src="/images/inline-logo.png"
+              alt="Hartza"
+              width={120}
+              height={32}
+              className="object-contain"
+              priority
+            />
+          </div>
+
+          <nav className="flex-1 px-3 py-4 space-y-1">
+            {nav.map(({ href, label, icon }) => {
+              const active = pathname === href
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-emerald-500/10 text-emerald-400'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="text-base leading-none">{icon}</span>
+                  {label}
+                </Link>
+              )
+            })}
+          </nav>
+
+          <div className="px-5 py-4 border-t border-slate-800 text-xs text-slate-600">
+            hartza budget
+          </div>
+        </aside>
+
+        {/* Main */}
+        <main className="flex-1 min-w-0 overflow-y-auto">
+          {children}
+        </main>
+      </body>
+    </html>
+  )
 }

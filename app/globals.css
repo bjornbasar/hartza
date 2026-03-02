@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
-/* Hartza brand helpers */
-:root{
-  --hartza-green:#2E4A3F;
-  --hartza-amber:#E5A823;
-  --hartza-teal:#1CAFBF;
-  --hartza-red:#B71C1C;
-}
-body{ 
-    color:#222; 
-    background: linear-gradient(to bottom right, var(--hartza-teal), #EEEEEE); 
+@theme {
+  --color-brand: #10b981;
+  --color-brand-dark: #059669;
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
 }
 
-button {
-    cursor: pointer;
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #020617;
+  color: #f1f5f9;
+  font-family: var(--font-sans);
 }
