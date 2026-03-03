@@ -27,6 +27,11 @@ services:
     environment:
       CHOKIDAR_USEPOLLING: "1"
       WATCHPACK_POLLING: "true"
+      NODE_OPTIONS: "--max-old-space-size=512"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     ports: ["5127:3000"]
     restart: always
     volumes:

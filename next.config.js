@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	reactStrictMode: true,
+	watchOptions: {
+		ignored: ['**/node_modules/**', '**/.git/**'],
+	},
 	// Optional: cache static assets aggressively in prod
 	async headers() {
 		return [
