@@ -25,6 +25,48 @@ export function parseCSV(text: string): Record<string, string>[] {
     })
 }
 
+/**
+ * Serialize multiple named sections into one CSV file.
+ * Format: [sectionName]\nheaders\nrows\n\n[nextSection]...
+ */
+export function serializeMultiCSV(sections: Record<string, Record<string, unknown>[]>): string {
+  return Object.entries(sections)
+    .map(([name, rows]) => {
+      const headers = rows.length ? Object.keys(rows[0]) : []
+      return `[${name}]\n${serializeCSV(headers, rows)}`
+    })
+    .join('\n\n')
+}
+
+/**
+ * Parse a multi-section CSV file back into named arrays.
+ */
+export function parseMultiCSV(text: string): Record<string, Record<string, string>[]> {
+  const result: Record<string, Record<string, string>[]> = {}
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+  let section = ''
+  let sectionLines: string[] = []
+
+  const flush = () => {
+    if (section && sectionLines.length) {
+      result[section] = parseCSV(sectionLines.join('\n'))
+    }
+  }
+
+  for (const line of lines) {
+    const m = line.match(/^\[(\w+)\]$/)
+    if (m) {
+      flush()
+      section = m[1]
+      sectionLines = []
+    } else if (section) {
+      sectionLines.push(line)
+    }
+  }
+  flush()
+  return result
+}
+
 function parseLine(line: string): string[] {
   const result: string[] = []
   let cur = ''

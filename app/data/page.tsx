@@ -2,9 +2,10 @@
 
 import { useRef, useState } from 'react'
 
-type DataType = 'income' | 'budget' | 'transactions'
+type DataType = 'all' | 'income' | 'budget' | 'transactions'
 
-const SECTIONS: { type: DataType; label: string }[] = [
+const SECTIONS: { type: DataType; label: string; description?: string }[] = [
+  { type: 'all', label: 'Everything', description: 'Income + Budget + Transactions in one file' },
   { type: 'income', label: 'Income' },
   { type: 'budget', label: 'Budget' },
   { type: 'transactions', label: 'Transactions' },
@@ -19,7 +20,7 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-function Section({ type, label }: { type: DataType; label: string }) {
+function Section({ type, label, description }: { type: DataType; label: string; description?: string }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ imported: number; errors: string[] } | null>(null)
@@ -54,7 +55,10 @@ function Section({ type, label }: { type: DataType; label: string }) {
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-      <h2 className="text-sm font-semibold text-slate-300 mb-5">{label}</h2>
+      <div className="mb-5">
+        <h2 className="text-sm font-semibold text-slate-300">{label}</h2>
+        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+      </div>
 
       {/* Export */}
       <div className="mb-5">

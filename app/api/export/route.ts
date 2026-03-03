@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
-import { serializeCSV } from '@/lib/csv'
+import { serializeCSV, serializeMultiCSV } from '@/lib/csv'
 import { format } from 'date-fns'
 
 type Fmt = 'csv' | 'json'
@@ -86,6 +86,58 @@ export async function GET(req: Request) {
       income: r.income?.name ?? '',
     }))
     return respond(rows, 'transactions', fmt)
+  }
+
+  if (type === 'all') {
+    const [incomeItems, budgetItems, txItems] = await Promise.all([
+      prisma.income.findMany({ where: { householdId }, orderBy: { createdAt: 'asc' } }),
+      prisma.budgetItem.findMany({ where: { householdId }, orderBy: { createdAt: 'asc' } }),
+      prisma.transaction.findMany({
+        where: { householdId },
+        include: {
+          budgetItem: { select: { name: true } },
+          income: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ])
+
+    const income = incomeItems.map((r) => ({
+      name: r.name, amount: r.amount, frequency: r.frequency,
+      startDate: format(r.startDate, 'yyyy-MM-dd'),
+      endDate: r.endDate ? format(r.endDate, 'yyyy-MM-dd') : '',
+      notes: r.notes ?? '', active: r.active,
+    }))
+    const budget = budgetItems.map((r) => ({
+      name: r.name, category: r.category ?? '', amount: r.amount, frequency: r.frequency,
+      startDate: format(r.startDate, 'yyyy-MM-dd'),
+      endDate: r.endDate ? format(r.endDate, 'yyyy-MM-dd') : '',
+      notes: r.notes ?? '', active: r.active,
+    }))
+    const transactions = txItems.map((r) => ({
+      type: r.type, amount: r.amount, date: format(r.date, 'yyyy-MM-dd'),
+      description: r.description ?? '',
+      budgetItem: r.budgetItem?.name ?? '',
+      income: r.income?.name ?? '',
+    }))
+
+    const date = format(new Date(), 'yyyy-MM-dd')
+
+    if (fmt === 'json') {
+      return new Response(JSON.stringify({ income, budget, transactions }, null, 2), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Disposition': `attachment; filename="hartza-${date}.json"`,
+        },
+      })
+    }
+
+    return new Response(serializeMultiCSV({ income, budget, transactions }), {
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="hartza-${date}.csv"`,
+      },
+    })
   }
 
   return new Response('Invalid type', { status: 400 })
