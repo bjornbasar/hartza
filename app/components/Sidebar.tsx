@@ -18,7 +18,7 @@ export default function Sidebar() {
   const { data: session } = useSession()
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col bg-slate-900 border-r border-slate-800">
+    <aside className="w-56 shrink-0 flex flex-col bg-slate-900 border-r border-slate-800 h-screen sticky top-0 overflow-hidden">
       <div className="px-5 py-6 border-b border-slate-800">
         <Image
           src="/images/inline-logo.png"
