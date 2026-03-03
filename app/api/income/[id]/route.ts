@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -13,6 +14,15 @@ const schema = z.object({
 })
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Verify ownership
+  const existing = await prisma.income.findUnique({ where: { id: params.id } })
+  if (!existing || existing.householdId !== session.householdId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   const body = await req.json()
   const data = schema.parse(body)
 
@@ -33,6 +43,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const existing = await prisma.income.findUnique({ where: { id: params.id } })
+  if (!existing || existing.householdId !== session.householdId) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   await prisma.income.delete({ where: { id: params.id } })
   return NextResponse.json({ ok: true })
 }

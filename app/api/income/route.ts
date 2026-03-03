@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -12,13 +13,20 @@ const schema = z.object({
 })
 
 export async function GET() {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const items = await prisma.income.findMany({
+    where: { householdId: session.householdId },
     orderBy: { createdAt: 'desc' },
   })
   return NextResponse.json(items)
 }
 
 export async function POST(req: Request) {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const body = await req.json()
   const data = schema.parse(body)
 
@@ -30,6 +38,7 @@ export async function POST(req: Request) {
       startDate: new Date(data.startDate),
       endDate: data.endDate ? new Date(data.endDate) : null,
       notes: data.notes ?? null,
+      householdId: session.householdId,
     },
   })
 

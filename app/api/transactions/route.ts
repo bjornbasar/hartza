@@ -1,32 +1,49 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
 
-const schema = z.object({
-  amount: z.number().positive(),
-  date: z.string(),
-  description: z.string().nullable().optional(),
-  budgetItemId: z.string().min(1),
-})
+const schema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('EXPENSE'),
+    amount: z.number().positive(),
+    date: z.string(),
+    description: z.string().nullable().optional(),
+    budgetItemId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('INCOME'),
+    amount: z.number().positive(),
+    date: z.string(),
+    description: z.string().nullable().optional(),
+    incomeId: z.string().nullable().optional(),
+  }),
+])
 
 export async function GET(req: Request) {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const budgetItemId = searchParams.get('budgetItemId')
   const from = searchParams.get('from')
-  const to = searchParams.get('to')
+  const to   = searchParams.get('to')
 
-  const where: Record<string, unknown> = {}
+  const where: Record<string, unknown> = { householdId: session.householdId }
   if (budgetItemId) where.budgetItemId = budgetItemId
   if (from || to) {
     where.date = {
       ...(from ? { gte: new Date(from) } : {}),
-      ...(to ? { lte: new Date(to) } : {}),
+      ...(to   ? { lte: new Date(to) }   : {}),
     }
   }
 
   const items = await prisma.transaction.findMany({
     where,
-    include: { budgetItem: { select: { id: true, name: true, category: true } } },
+    include: {
+      budgetItem: { select: { id: true, name: true, category: true } },
+      income:     { select: { id: true, name: true } },
+    },
     orderBy: { date: 'desc' },
   })
 
@@ -34,17 +51,35 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const body = await req.json()
   const data = schema.parse(body)
 
   const item = await prisma.transaction.create({
-    data: {
-      amount: data.amount,
-      date: new Date(data.date),
-      description: data.description ?? null,
-      budgetItemId: data.budgetItemId,
+    data:
+      data.type === 'EXPENSE'
+        ? {
+            type: 'EXPENSE',
+            amount: data.amount,
+            date: new Date(data.date),
+            description: data.description ?? null,
+            budgetItemId: data.budgetItemId,
+            householdId: session.householdId,
+          }
+        : {
+            type: 'INCOME',
+            amount: data.amount,
+            date: new Date(data.date),
+            description: data.description ?? null,
+            incomeId: data.incomeId ?? null,
+            householdId: session.householdId,
+          },
+    include: {
+      budgetItem: { select: { id: true, name: true, category: true } },
+      income:     { select: { id: true, name: true } },
     },
-    include: { budgetItem: { select: { id: true, name: true, category: true } } },
   })
 
   return NextResponse.json(item, { status: 201 })

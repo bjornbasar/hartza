@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireSession } from '@/lib/auth'
 import { getCurrentPeriod, toMonthly, isActiveOn } from '@/lib/budget'
 import { Frequency } from '@prisma/client'
 import { format } from 'date-fns'
 
 export async function GET() {
+  const session = await requireSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const now = new Date()
+  const { householdId } = session
 
   // --- Income ---
-  const incomes = await prisma.income.findMany({ where: { active: true } })
+  const incomes = await prisma.income.findMany({ where: { active: true, householdId } })
 
   let monthlyIncome = 0
   for (const inc of incomes) {
@@ -18,8 +23,8 @@ export async function GET() {
 
   // --- Budget items with current-period spend ---
   const budgetItems = await prisma.budgetItem.findMany({
-    where: { active: true },
-    include: { transactions: true },
+    where: { active: true, householdId },
+    include: { transactions: { where: { householdId } } },
   })
 
   let monthlyBudget = 0

@@ -1,7 +1,7 @@
 services:
   hartzadb:
     image: postgres:16-alpine
-    container_name: hartza-db
+    container_name: hartzadb
     restart: always
     environment:
       POSTGRES_USER: hartza
@@ -10,33 +10,17 @@ services:
     ports:
       - "5436:5432"
     volumes:
-      - /mnt/ssd-all/hartza/pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hartza -d hartza"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    container_name: hartza-mailhog
-    restart: always
-    profiles: ["optional"]
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8025"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
   hartza-web:
     build:
-      context: .          # you're already running compose ON Hurska in the NFS mount — good
+      context: .
       target: dev
-      # If Hurska is Pi 3, uncomment:
-      # platform: "linux/arm/v7"
     container_name: hartza-web
     working_dir: /app
     env_file: [.env]
@@ -46,11 +30,9 @@ services:
     ports: ["5127:3000"]
     restart: always
     volumes:
-      - ./:/app                         # NFS-mounted source
-      - node-modules:/app/node_modules  # keep deps internal
-      # Optional caches (pick what your framework uses):
+      - ./:/app
+      - node-modules:/app/node_modules
       - next-cache:/app/.next
-      - vite-cache:/app/node_modules/.vite
       - npm-cache:/root/.npm
     depends_on:
       hartzadb:
@@ -61,10 +43,8 @@ services:
       timeout: 10s
       retries: 5
 
-
 volumes:
+  pgdata:
   node-modules:
   next-cache:
-  vite-cache:
   npm-cache:
-

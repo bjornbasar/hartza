@@ -61,21 +61,21 @@ jobs:
       if: github.event_name != 'pull_request'
       run: echo ${{ steps.build-and-push.outputs.digest }}
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: build-and-push
+  #   if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     
-    steps:
-    - name: Deploy to Chidole
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: cli.basar.co.nz        # inner server
-        port: 5127
-        username: ubuntu
-        key: ${{ secrets.CHIDOLE_SSH_KEY }} # key for inner server
-        script: |
-          cd /data/personal/hartza
-          sudo sed -i '/^VERSION=/d' .env
-          echo "VERSION=${{ env.VERSION }}" | sudo tee -a .env > /dev/null
-          sudo docker compose pull
+  #   steps:
+  #   - name: Deploy to Chidole
+  #     uses: appleboy/ssh-action@v1.0.0
+  #     with:
+  #       host: cli.basar.co.nz        # inner server
+  #       port: 5127
+  #       username: ubuntu
+  #       key: ${{ secrets.CHIDOLE_SSH_KEY }} # key for inner server
+  #       script: |
+  #         cd /data/personal/hartza
+  #         sudo sed -i '/^VERSION=/d' .env
+  #         echo "VERSION=${{ env.VERSION }}" | sudo tee -a .env > /dev/null
+  #         sudo docker compose pull

@@ -14,17 +14,65 @@ enum Frequency {
   MONTHLY
 }
 
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+model Household {
+  id           String        @id @default(cuid())
+  name         String
+  joinCode     String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  members      User[]
+  incomes      Income[]
+  budgetItems  BudgetItem[]
+  transactions Transaction[]
+  config       Config?
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(MEMBER)
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Config {
+  id              String    @id @default(cuid())
+  startingBalance Float     @default(0)
+  balanceDate     DateTime? @db.Date
+  householdId     String    @unique
+  household       Household @relation(fields: [householdId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
 model Income {
-  id        String    @id @default(cuid())
-  name      String
-  amount    Float
-  frequency Frequency
-  startDate DateTime  @db.Date
-  endDate   DateTime? @db.Date
-  notes     String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           String        @id @default(cuid())
+  name         String
+  amount       Float
+  frequency    Frequency
+  startDate    DateTime      @db.Date
+  endDate      DateTime?     @db.Date
+  notes        String?
+  active       Boolean       @default(true)
+  householdId  String
+  household    Household     @relation(fields: [householdId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
 }
 
 model BudgetItem {
@@ -37,18 +85,27 @@ model BudgetItem {
   endDate      DateTime?     @db.Date
   notes        String?
   active       Boolean       @default(true)
+  householdId  String
+  household    Household     @relation(fields: [householdId], references: [id])
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   transactions Transaction[]
 }
 
 model Transaction {
-  id           String     @id @default(cuid())
+  id           String          @id @default(cuid())
+  type         TransactionType @default(EXPENSE)
   amount       Float
-  date         DateTime   @db.Date
+  date         DateTime        @db.Date
   description  String?
-  budgetItemId String
-  budgetItem   BudgetItem @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  householdId  String
+  household    Household       @relation(fields: [householdId], references: [id])
+  // EXPENSE: link to budget item (required for expenses)
+  budgetItemId String?
+  budgetItem   BudgetItem?     @relation(fields: [budgetItemId], references: [id], onDelete: Cascade)
+  // INCOME: optional link to an income source
+  incomeId     String?
+  income       Income?         @relation(fields: [incomeId], references: [id], onDelete: SetNull)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
