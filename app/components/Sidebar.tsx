@@ -10,6 +10,7 @@ const nav = [
   { href: '/income', label: 'Income', icon: '↑' },
   { href: '/budget', label: 'Budget', icon: '◉' },
   { href: '/transactions', label: 'Transactions', icon: '↔' },
+  { href: '/data', label: 'Import / Export', icon: '⇅' },
 ]
 
 export default function Sidebar() {
