@@ -72,9 +72,7 @@ export default function TransactionsPage() {
 
   function openNew(type: 'EXPENSE' | 'INCOME' = 'EXPENSE') {
     setEditing(null)
-    setForm(type === 'EXPENSE'
-      ? { ...EMPTY_EXPENSE, budgetItemId: budgetItems[0]?.id ?? '' }
-      : { ...EMPTY_INCOME })
+    setForm(type === 'EXPENSE' ? { ...EMPTY_EXPENSE } : { ...EMPTY_INCOME })
     setShowForm(true)
   }
 
@@ -118,10 +116,7 @@ export default function TransactionsPage() {
   const totalReceived = txns.filter(t => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const grouped = groupByDate(txns)
 
-  const canSave =
-    form.amount > 0 &&
-    form.date &&
-    (form.type === 'INCOME' || Boolean(form.budgetItemId))
+  const canSave = form.amount > 0 && Boolean(form.date)
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -145,9 +140,7 @@ export default function TransactionsPage() {
           </button>
           <button
             onClick={() => openNew('EXPENSE')}
-            disabled={budgetItems.length === 0}
-            title={budgetItems.length === 0 ? 'Add a budget item first' : ''}
-            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             + Expense
           </button>
@@ -207,7 +200,9 @@ export default function TransactionsPage() {
                         <p className="text-xs text-slate-500 mt-0.5">
                           {t.type === 'INCOME'
                             ? <span className="text-emerald-600">{t.income?.name ?? 'One-off income'}</span>
-                            : <><span className="text-slate-400">{t.budgetItem?.name}</span>{t.budgetItem?.category && <span className="text-slate-600"> · {t.budgetItem.category}</span>}</>
+                            : t.budgetItem
+                              ? <><span className="text-slate-400">{t.budgetItem.name}</span>{t.budgetItem.category && <span className="text-slate-600"> · {t.budgetItem.category}</span>}</>
+                              : <span className="text-amber-600/80 italic">Unplanned</span>
                           }
                         </p>
                       </div>
@@ -239,7 +234,7 @@ export default function TransactionsPage() {
                 <button
                   key={t}
                   onClick={() => setForm(t === 'EXPENSE'
-                    ? { ...form, type: 'EXPENSE', budgetItemId: budgetItems[0]?.id ?? '', incomeId: '' }
+                    ? { ...form, type: 'EXPENSE', budgetItemId: '', incomeId: '' }
                     : { ...form, type: 'INCOME',  budgetItemId: '', incomeId: '' }
                   )}
                   className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -257,13 +252,15 @@ export default function TransactionsPage() {
               {/* Expense: budget item selector */}
               {form.type === 'EXPENSE' && (
                 <label className="block">
-                  <span className="text-xs text-slate-400 uppercase tracking-wider">Budget Item</span>
+                  <span className="text-xs text-slate-400 uppercase tracking-wider">
+                    Budget Item <span className="text-slate-600">(optional)</span>
+                  </span>
                   <select
                     className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
                     value={form.budgetItemId}
                     onChange={(e) => setForm({ ...form, budgetItemId: e.target.value })}
                   >
-                    <option value="">Select…</option>
+                    <option value="">Unplanned</option>
                     {budgetItems.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name} — {fmt(b.amount)} / {frequencyLabel(b.frequency)}{b.category ? ` (${b.category})` : ''}

@@ -9,7 +9,7 @@ const schema = z.discriminatedUnion('type', [
     amount: z.number().positive(),
     date: z.string(),
     description: z.string().nullable().optional(),
-    budgetItemId: z.string().min(1),
+    budgetItemId: z.string().optional().nullable(),
   }),
   z.object({
     type: z.literal('INCOME'),
@@ -43,7 +43,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             amount: data.amount,
             date: new Date(data.date),
             description: data.description ?? null,
-            budgetItemId: data.budgetItemId,
+            budgetItemId: data.budgetItemId || null,
             incomeId: null,
           }
         : {
