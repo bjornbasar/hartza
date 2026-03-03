@@ -14,11 +14,13 @@ const schema = z.object({
   active: z.boolean().optional(),
 })
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const existing = await prisma.budgetItem.findUnique({ where: { id: params.id } })
+  const { id } = await params
+
+  const existing = await prisma.budgetItem.findUnique({ where: { id } })
   if (!existing || existing.householdId !== session.householdId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -27,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const data = schema.parse(body)
 
   const item = await prisma.budgetItem.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       name: data.name,
       category: data.category ?? null,
@@ -43,15 +45,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json(item)
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const existing = await prisma.budgetItem.findUnique({ where: { id: params.id } })
+  const { id } = await params
+
+  const existing = await prisma.budgetItem.findUnique({ where: { id } })
   if (!existing || existing.householdId !== session.householdId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  await prisma.budgetItem.delete({ where: { id: params.id } })
+  await prisma.budgetItem.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }

@@ -13,12 +13,13 @@ const schema = z.object({
   active: z.boolean().optional(),
 })
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Verify ownership
-  const existing = await prisma.income.findUnique({ where: { id: params.id } })
+  const { id } = await params
+
+  const existing = await prisma.income.findUnique({ where: { id } })
   if (!existing || existing.householdId !== session.householdId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -27,7 +28,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const data = schema.parse(body)
 
   const item = await prisma.income.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       name: data.name,
       amount: data.amount,
@@ -42,15 +43,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json(item)
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const existing = await prisma.income.findUnique({ where: { id: params.id } })
+  const { id } = await params
+
+  const existing = await prisma.income.findUnique({ where: { id } })
   if (!existing || existing.householdId !== session.householdId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  await prisma.income.delete({ where: { id: params.id } })
+  await prisma.income.delete({ where: { id } })
   return NextResponse.json({ ok: true })
 }
