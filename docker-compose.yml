@@ -1,22 +1,9 @@
-services:
-  hartzadb:
-    image: postgres:16-alpine
-    container_name: hartzadb
-    restart: always
-    environment:
-      POSTGRES_USER: hartza
-      POSTGRES_PASSWORD: hartza
-      POSTGRES_DB: hartza
-    ports:
-      - "5436:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hartza -d hartza"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
+networks:
+  webapps:
+    name: webapps
+    external: true
 
+services:
   hartza-web:
     build:
       context: .
@@ -28,10 +15,6 @@ services:
       CHOKIDAR_USEPOLLING: "1"
       WATCHPACK_POLLING: "true"
       NODE_OPTIONS: "--max-old-space-size=512"
-    deploy:
-      resources:
-        limits:
-          memory: 1g
     ports: ["5127:3000"]
     restart: always
     volumes:
@@ -39,9 +22,8 @@ services:
       - node-modules:/app/node_modules
       - next-cache:/app/.next
       - npm-cache:/root/.npm
-    depends_on:
-      hartzadb:
-        condition: service_healthy
+    networks:
+      - webapps
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
       interval: 30s
@@ -49,7 +31,6 @@ services:
       retries: 5
 
 volumes:
-  pgdata:
   node-modules:
   next-cache:
   npm-cache:

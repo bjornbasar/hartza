@@ -17,6 +17,8 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
 
+  if (!session) return null
+
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-slate-900 border-r border-slate-800 h-screen sticky top-0 overflow-hidden">
       <div className="px-5 py-6 border-b border-slate-800">
