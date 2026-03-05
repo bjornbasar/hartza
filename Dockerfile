@@ -29,6 +29,7 @@ CMD ["dev-entrypoint"]
 
 # Prod image: baked build, no bind mounts needed
 FROM base AS prod
+RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 EXPOSE 3000
 COPY --from=builder /app ./
