@@ -2,16 +2,27 @@ services:
   hartza-web:
     build:
       context: .
-      target: prod
+      target: dev
     container_name: hartza-web
+    working_dir: /app
     env_file: [.env]
     environment:
-      NODE_ENV: production
+      CHOKIDAR_USEPOLLING: "1"
+      WATCHPACK_POLLING: "true"
       NODE_OPTIONS: "--max-old-space-size=1024"
     ports: ["5127:3000"]
     restart: always
+    volumes:
+      - ./:/app
+      - node-modules:/app/node_modules
+      - /app/.next
+      - npm-cache:/root/.npm
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 5
+
+volumes:
+  node-modules:
+  npm-cache:

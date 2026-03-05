@@ -28,10 +28,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen">
+      <body className="md:flex min-h-screen">
         <Providers>
           <Sidebar />
-          <main className="flex-1 min-w-0 overflow-y-auto">
+          <main className="flex-1 min-w-0 overflow-y-auto pt-14 md:pt-0">
             {children}
           </main>
         </Providers>

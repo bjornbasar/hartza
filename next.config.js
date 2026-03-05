@@ -1,9 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	reactStrictMode: true,
-	watchOptions: {
-		ignored: ['**/node_modules/**', '**/.git/**'],
-	},
+	allowedDevOrigins: ["hartza.minified.work"],
 	// Optional: cache static assets aggressively in prod
 	async headers() {
 		return [

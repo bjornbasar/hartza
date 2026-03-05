@@ -11,6 +11,8 @@ import {
   differenceInDays,
   isBefore,
   isAfter,
+  addDays,
+  subDays,
   startOfMonth,
   endOfMonth,
   startOfDay,
@@ -25,6 +27,44 @@ type ActualEvent  = {
   description: string | null
   label: string      // budget item name or income source name or 'One-off income'
   amount: number
+}
+
+/** Return the start/end of the current billing period for a recurring item */
+function currentPeriodBounds(
+  frequency: Frequency,
+  startDate: Date,
+  now: Date,
+): { periodStart: Date; periodEnd: Date } | null {
+  if (frequency === 'ONE_OFF') return null
+  if (isBefore(now, startDate)) return null // hasn't started yet
+
+  switch (frequency) {
+    case 'WEEKLY': {
+      const startDow = getDay(startDate)
+      const nowDow = getDay(now)
+      const daysSinceLast = ((nowDow - startDow) % 7 + 7) % 7
+      const periodStart = startOfDay(subDays(now, daysSinceLast))
+      const periodEnd = startOfDay(addDays(periodStart, 6))
+      return { periodStart, periodEnd }
+    }
+    case 'FORTNIGHTLY': {
+      const diff = differenceInDays(now, startDate)
+      const periodsElapsed = Math.floor(diff / 14)
+      const periodStart = startOfDay(addDays(startDate, periodsElapsed * 14))
+      const periodEnd = startOfDay(addDays(periodStart, 13))
+      return { periodStart, periodEnd }
+    }
+    case 'MONTHLY': {
+      const day = startDate.getDate()
+      let periodStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), day))
+      if (isAfter(periodStart, now)) {
+        periodStart = startOfDay(new Date(now.getFullYear(), now.getMonth() - 1, day))
+      }
+      const nextOcc = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, day)
+      const periodEnd = startOfDay(subDays(nextOcc, 1))
+      return { periodStart, periodEnd }
+    }
+  }
 }
 
 function hitsDay(frequency: Frequency, startDate: Date, day: Date): boolean {
@@ -93,6 +133,36 @@ export async function GET(req: Request) {
     })
   }
 
+  // --- Remaining budget for current periods ---
+  // For each recurring budget item, figure out how much of the current period
+  // is unspent and project it as a future event on the period's last day.
+  const remainingBudget = new Map<string, { item: typeof budgetItems[0]; remaining: number; periodEndKey: string }>()
+
+  for (const item of budgetItems) {
+    if (!item.active) continue
+    const bounds = currentPeriodBounds(item.frequency as Frequency, item.startDate, now)
+    if (!bounds) continue
+    if (!isAfter(bounds.periodEnd, now)) continue // period already ended
+
+    const spent = allTransactions
+      .filter(t =>
+        t.budgetItemId === item.id &&
+        t.type === 'EXPENSE' &&
+        !isBefore(t.date, bounds.periodStart) &&
+        !isAfter(t.date, now)
+      )
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    const remaining = item.amount - spent
+    if (remaining > 0) {
+      remainingBudget.set(item.id, {
+        item,
+        remaining: Math.round(remaining * 100) / 100,
+        periodEndKey: format(bounds.periodEnd, 'yyyy-MM-dd'),
+      })
+    }
+  }
+
   // Build daily series
   const days = eachDayOfInterval({ start: from, end: to })
   let balance = openingBalance
@@ -128,6 +198,19 @@ export async function GET(req: Request) {
         if (hitsDay(item.frequency as Frequency, item.startDate, day)) {
           budgetEvents.push({ id: item.id, name: item.name, category: item.category, amount: item.amount })
           balance -= item.amount
+        }
+      }
+
+      // Inject remaining from current period on the period's last day
+      for (const [, { item, remaining, periodEndKey }] of remainingBudget) {
+        if (key === periodEndKey) {
+          budgetEvents.push({
+            id: item.id,
+            name: `${item.name} (remaining)`,
+            category: item.category,
+            amount: remaining,
+          })
+          balance -= remaining
         }
       }
     }
