@@ -1,6 +1,4 @@
-# Use Node 20 if you're on a Pi 3 (armv7). If you're x86/arm64, Node 22 is fine.
-# FROM --platform=linux/arm/v7 node:20-alpine AS base
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 WORKDIR /app
 ENV CI=true
 

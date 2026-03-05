@@ -1,8 +1,3 @@
-networks:
-  webapps:
-    name: webapps
-    external: true
-
 services:
   hartza-web:
     build:
@@ -22,8 +17,6 @@ services:
       - node-modules:/app/node_modules
       - next-cache:/app/.next
       - npm-cache:/root/.npm
-    networks:
-      - webapps
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
       interval: 30s
