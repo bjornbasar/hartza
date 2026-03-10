@@ -1,0 +1,17 @@
+services:
+  hartza-web:
+    build:
+      context: .
+      target: prod
+    container_name: hartza-web
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: "--max-old-space-size=1024"
+    ports: ["5127:3000"]
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
