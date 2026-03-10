@@ -26,15 +26,16 @@ enum Role {
 }
 
 model Household {
-  id           String        @id @default(cuid())
+  id           String         @id @default(cuid())
   name         String
-  joinCode     String        @unique
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  joinCode     String         @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   members      User[]
   incomes      Income[]
   budgetItems  BudgetItem[]
   transactions Transaction[]
+  savingsGoals SavingsGoal[]
   config       Config?
 }
 
@@ -109,4 +110,31 @@ model Transaction {
   income       Income?         @relation(fields: [incomeId], references: [id], onDelete: SetNull)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+}
+
+model SavingsGoal {
+  id          String           @id @default(cuid())
+  name        String
+  targetAmount Float
+  frequency   Frequency        // how often you plan to contribute
+  amount      Float            // planned contribution per period
+  startDate   DateTime         @db.Date
+  notes       String?
+  active      Boolean          @default(true)
+  householdId String
+  household   Household        @relation(fields: [householdId], references: [id])
+  deposits    SavingsDeposit[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model SavingsDeposit {
+  id            String      @id @default(cuid())
+  amount        Float
+  date          DateTime    @db.Date
+  description   String?
+  savingsGoalId String
+  savingsGoal   SavingsGoal @relation(fields: [savingsGoalId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }

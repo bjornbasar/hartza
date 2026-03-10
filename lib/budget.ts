@@ -100,11 +100,45 @@ export function toMonthly(amount: number, frequency: Frequency): number {
 }
 
 export function isActiveOn(
-  startDate: Date,
+  _startDate: Date,
   endDate: Date | null,
   ref: Date = new Date(),
 ): boolean {
-  if (isBefore(ref, startDate)) return false
+  // Items are visible even before startDate (allow early payments)
   if (endDate && isAfter(ref, endDate)) return false
   return true
+}
+
+/**
+ * Returns the number of periods elapsed since startDate (minimum 1).
+ * Before startDate → 1 (first period, accepting early payments).
+ * After endDate → total periods that existed.
+ */
+export function getPeriodsElapsed(
+  frequency: Frequency,
+  startDate: Date,
+  endDate: Date | null,
+  ref: Date = new Date(),
+): number {
+  if (frequency === 'ONE_OFF') return 1
+
+  // Before start: first period (early payment)
+  if (isBefore(ref, startDate)) return 1
+
+  // Cap ref to endDate if past
+  const effective = endDate && isAfter(ref, endDate) ? endDate : ref
+  const days = differenceInDays(effective, startDate)
+
+  switch (frequency) {
+    case 'WEEKLY':
+      return Math.floor(days / 7) + 1
+    case 'FORTNIGHTLY':
+      return Math.floor(days / 14) + 1
+    case 'MONTHLY': {
+      const months =
+        (effective.getFullYear() - startDate.getFullYear()) * 12 +
+        (effective.getMonth() - startDate.getMonth())
+      return Math.max(months, 0) + 1
+    }
+  }
 }

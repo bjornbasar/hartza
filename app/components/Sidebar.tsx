@@ -11,6 +11,7 @@ const nav = [
   { href: '/cashflow', label: 'Cash Flow', icon: '≋' },
   { href: '/income', label: 'Income', icon: '↑' },
   { href: '/budget', label: 'Budget', icon: '◉' },
+  { href: '/savings', label: 'Savings', icon: '⊕' },
   { href: '/transactions', label: 'Transactions', icon: '↔' },
   { href: '/data', label: 'Import / Export', icon: '⇅' },
 ]

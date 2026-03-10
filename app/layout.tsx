@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="md:flex min-h-screen">
+      <body className="min-h-screen md:flex md:h-screen md:overflow-hidden">
         <Providers>
           <Sidebar />
           <main className="flex-1 min-w-0 overflow-y-auto pt-14 md:pt-0">

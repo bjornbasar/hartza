@@ -38,7 +38,7 @@ type ChartPoint = DataPoint & {
 }
 
 function currency(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -162,7 +162,7 @@ export default function CashFlowChart({
   ]
 
   const yFormat = (v: number) =>
-    Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`
+    Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(2)}`
 
   return (
     <ResponsiveContainer width="100%" height={300}>

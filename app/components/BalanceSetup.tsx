@@ -9,7 +9,7 @@ type Config = {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
 }
 
 export default function BalanceSetup({ onSave }: { onSave?: () => void }) {

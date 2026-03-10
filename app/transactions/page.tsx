@@ -26,7 +26,7 @@ const EMPTY_EXPENSE = { type: 'EXPENSE' as const, amount: 0, date: today, descri
 const EMPTY_INCOME  = { type: 'INCOME'  as const, amount: 0, date: today, description: '', budgetItemId: '', incomeId: '' }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
 }
 
 function groupByDate(txns: Transaction[]): Map<string, Transaction[]> {

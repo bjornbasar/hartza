@@ -28,7 +28,7 @@ const EMPTY: Omit<BudgetItem, 'id' | 'active'> = {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
 }
 
 // Group items by category

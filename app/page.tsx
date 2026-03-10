@@ -43,7 +43,7 @@ type ForecastPoint = {
 const PADDING_OPTIONS = [0, 3, 7] // days before/after
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
 }
 
 function ProgressBar({ pct, over }: { pct: number; over: boolean }) {

@@ -21,12 +21,13 @@ type EventItem = {
   kind: 'actual-income' | 'actual-expense' | 'projected-income' | 'projected-budget'
   name: string
   amount: number
+  notes: string | null
 }
 
 const PADDING_OPTIONS = [0, 3, 7]
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
 }
 
 function flattenEvents(points: ForecastPoint[]): Map<string, EventItem[]> {
@@ -40,15 +41,16 @@ function flattenEvents(points: ForecastPoint[]): Map<string, EventItem[]> {
         kind: ev.type === 'INCOME' ? 'actual-income' : 'actual-expense',
         name: ev.label || ev.description || (ev.type === 'INCOME' ? 'Income' : 'Expense'),
         amount: ev.amount,
+        notes: ev.description && ev.label && ev.description !== ev.label ? ev.description : null,
       })
     }
 
     for (const ev of pt.incomeEvents) {
-      items.push({ kind: 'projected-income', name: ev.name, amount: ev.amount })
+      items.push({ kind: 'projected-income', name: ev.name, amount: ev.amount, notes: null })
     }
 
     for (const ev of pt.budgetEvents) {
-      items.push({ kind: 'projected-budget', name: ev.name, amount: ev.amount })
+      items.push({ kind: 'projected-budget', name: ev.name, amount: ev.amount, notes: null })
     }
 
     if (items.length > 0) map.set(pt.date, items)
@@ -224,7 +226,12 @@ export default function CashFlowPage() {
                         className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 flex items-center gap-3"
                       >
                         <span className={`w-1 h-6 rounded-full shrink-0 ${style.bar}`} />
-                        <span className="flex-1 text-sm text-slate-200 truncate">{ev.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-slate-200 truncate block">{ev.name}</span>
+                          {ev.notes && (
+                            <span className="text-xs text-slate-500 truncate block">{ev.notes}</span>
+                          )}
+                        </div>
                         <span className={`text-sm font-medium shrink-0 ${style.text}`}>
                           {style.sign === '+' ? '+' : '-'}{fmt(ev.amount)}
                         </span>

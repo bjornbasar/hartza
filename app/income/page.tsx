@@ -26,7 +26,7 @@ const EMPTY: Omit<Income, 'id' | 'active'> = {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })
+  return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
 }
 
 export default function IncomePage() {
