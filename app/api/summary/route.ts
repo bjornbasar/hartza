@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
-import { getCurrentPeriod, getPeriodsElapsed, toMonthly, isActiveOn } from '@/lib/budget'
+import { getCurrentPeriod, toMonthly, isActiveOn } from '@/lib/budget'
 import { Frequency } from '@prisma/client'
-import { format } from 'date-fns'
+import { format, isBefore, isAfter } from 'date-fns'
 
 export async function GET() {
   const session = await requireSession()
@@ -37,26 +37,38 @@ export async function GET() {
     monthlyBudget += toMonthly(item.amount, freq)
 
     const period = getCurrentPeriod(freq, item.startDate, now)
-    const periodsElapsed = getPeriodsElapsed(freq, item.startDate, item.endDate, now)
+    const periodBudget = item.amount
 
-    // Cumulative: expected = amount * periods elapsed, spent = all transactions to date
-    const expectedTotal = item.amount * periodsElapsed
-    const spent = item.transactions.reduce((s, t) => s + t.amount, 0)
-    const remaining = expectedTotal - spent
-    const percentUsed = expectedTotal > 0 ? Math.min((spent / expectedTotal) * 100, 100) : 0
+    // Per-period spend: only count transactions within the current period.
+    // Exception: if the budget hasn't started yet (advance payments), count
+    // all transactions before startDate toward the first period.
+    const hasStarted = !isBefore(now, item.startDate)
+    const spent = item.transactions
+      .filter(t => {
+        if (freq === 'ONE_OFF') return true
+        if (!hasStarted) {
+          // Pre-start: count transactions up to startDate (advance payments)
+          return isBefore(t.date, item.startDate) || !isAfter(t.date, item.startDate)
+        }
+        // Active: only count transactions within current period
+        return !isBefore(t.date, period.start) && !isAfter(t.date, period.end)
+      })
+      .reduce((s, t) => s + t.amount, 0)
+    const remaining = periodBudget - spent
+    const percentUsed = periodBudget > 0 ? Math.min((spent / periodBudget) * 100, 100) : 0
 
     itemSummaries.push({
       id: item.id,
       name: item.name,
       category: item.category,
       frequency: freq,
-      amount: expectedTotal,
+      amount: periodBudget,
       periodStart: format(period.start, 'yyyy-MM-dd'),
       periodEnd: format(period.end, 'yyyy-MM-dd'),
       spent: Math.round(spent * 100) / 100,
       remaining: Math.round(remaining * 100) / 100,
       percentUsed: Math.round(percentUsed * 10) / 10,
-      isOverBudget: spent > expectedTotal,
+      isOverBudget: spent > periodBudget,
     })
   }
 
