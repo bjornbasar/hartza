@@ -61,7 +61,7 @@ export default function Sidebar() {
             alt="Hartza"
             width={120}
             height={32}
-            className="object-contain"
+            className="object-contain bg-slate-100 rounded-lg px-2 py-1"
             priority
           />
           <button
