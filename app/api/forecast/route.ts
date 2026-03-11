@@ -96,11 +96,14 @@ export async function GET(req: Request) {
   const balanceDate     = config?.balanceDate ?? now
 
   // --- Load data ---
+  // Load transactions from the earlier of `from` or `balanceDate` so we can
+  // reconstruct the balance in both directions from the anchor point.
+  const txnStart = isBefore(from, balanceDate) ? from : balanceDate
   const [incomes, budgetItems, allTransactions] = await Promise.all([
     prisma.income.findMany({ where: { active: true, householdId } }),
     prisma.budgetItem.findMany({ where: { active: true, householdId } }),
     prisma.transaction.findMany({
-      where: { householdId, date: { gte: balanceDate } },
+      where: { householdId, date: { gte: txnStart } },
       include: {
         budgetItem: { select: { name: true } },
         income:     { select: { name: true } },
@@ -109,11 +112,21 @@ export async function GET(req: Request) {
     }),
   ])
 
-  // Compute opening balance at `from` by replaying transactions before the range
+  // Compute opening balance at `from` by replaying transactions between
+  // the anchor date and `from` (forward or backward depending on order).
   let openingBalance = startingBalance
-  for (const t of allTransactions) {
-    if (t.date >= from) break
-    openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
+  if (isBefore(from, balanceDate)) {
+    // View starts before anchor — subtract transactions between from..balanceDate
+    for (const t of allTransactions) {
+      if (t.date >= balanceDate) break
+      openingBalance -= t.type === 'INCOME' ? t.amount : -t.amount
+    }
+  } else {
+    // View starts at or after anchor — add transactions between balanceDate..from
+    for (const t of allTransactions) {
+      if (t.date >= from) break
+      openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
+    }
   }
 
   // Index in-range transactions by date
