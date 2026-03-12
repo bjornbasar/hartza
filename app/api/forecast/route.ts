@@ -98,10 +98,8 @@ export async function GET(req: Request) {
   // --- Load data ---
   // Load transactions from the earlier of `from` or `balanceDate` so we can
   // reconstruct the balance in both directions from the anchor point.
-  // Cashflow plots by transaction date (when money actually moved).
-  // effectiveDate is only used for budget period matching in /api/summary.
   const txnStart = isBefore(from, balanceDate) ? from : balanceDate
-  const [incomes, budgetItems, allTransactions] = await Promise.all([
+  const [incomes, budgetItems, rawTransactions] = await Promise.all([
     prisma.income.findMany({ where: { active: true, householdId } }),
     prisma.budgetItem.findMany({ where: { active: true, householdId } }),
     prisma.transaction.findMany({
@@ -113,29 +111,36 @@ export async function GET(req: Request) {
       orderBy: { date: 'asc' },
     }),
   ])
+  // Sort by effective date for correct balance reconstruction
+  const allTransactions = rawTransactions.sort((a, b) => {
+    const da = (a.effectiveDate ?? a.date).getTime()
+    const db = (b.effectiveDate ?? b.date).getTime()
+    return da - db
+  })
 
   // Compute opening balance at `from` by replaying transactions between
   // the anchor date and `from` (forward or backward depending on order).
   let openingBalance = startingBalance
   if (isBefore(from, balanceDate)) {
-    // View starts before anchor — subtract transactions between from..balanceDate
     for (const t of allTransactions) {
-      if (t.date >= balanceDate) break
+      const d = t.effectiveDate ?? t.date
+      if (d >= balanceDate) break
       openingBalance -= t.type === 'INCOME' ? t.amount : -t.amount
     }
   } else {
-    // View starts at or after anchor — add transactions between balanceDate..from
     for (const t of allTransactions) {
-      if (t.date >= from) break
+      const d = t.effectiveDate ?? t.date
+      if (d >= from) break
       openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
     }
   }
 
-  // Index in-range transactions by transaction date (when money moved)
+  // Index in-range transactions by effective date (or transaction date)
   const txnsByDay = new Map<DayKey, ActualEvent[]>()
   for (const t of allTransactions) {
-    if (t.date < from || t.date > to) continue
-    const key = format(t.date, 'yyyy-MM-dd')
+    const d = t.effectiveDate ?? t.date
+    if (d < from || d > to) continue
+    const key = format(d, 'yyyy-MM-dd')
     if (!txnsByDay.has(key)) txnsByDay.set(key, [])
     txnsByDay.get(key)!.push({
       type: t.type,
@@ -146,6 +151,35 @@ export async function GET(req: Request) {
           : (t.income?.name ?? 'One-off income'),
       amount: t.amount,
     })
+  }
+
+  // For dedup: compute how much each budget/income item is covered by actual
+  // transactions in the current period (so projections can be suppressed)
+  function periodSpentFor(itemId: string, freq: Frequency, startDate: Date): number {
+    const bounds = currentPeriodBounds(freq, startDate, now)
+    if (!bounds) return 0
+    return allTransactions
+      .filter(t => {
+        const d = t.effectiveDate ?? t.date
+        return t.budgetItemId === itemId &&
+          t.type === 'EXPENSE' &&
+          !isBefore(d, bounds.periodStart) &&
+          !isAfter(d, bounds.periodEnd)
+      })
+      .reduce((sum, t) => sum + t.amount, 0)
+  }
+  function periodReceivedFor(incId: string, freq: Frequency, startDate: Date): number {
+    const bounds = currentPeriodBounds(freq, startDate, now)
+    if (!bounds) return 0
+    return allTransactions
+      .filter(t => {
+        const d = t.effectiveDate ?? t.date
+        return t.incomeId === incId &&
+          t.type === 'INCOME' &&
+          !isBefore(d, bounds.periodStart) &&
+          !isAfter(d, bounds.periodEnd)
+      })
+      .reduce((sum, t) => sum + t.amount, 0)
   }
 
   // --- Remaining budget for current periods ---
@@ -160,12 +194,13 @@ export async function GET(req: Request) {
     if (!isAfter(bounds.periodEnd, now)) continue // period already ended
 
     const spent = allTransactions
-      .filter(t =>
-        t.budgetItemId === item.id &&
-        t.type === 'EXPENSE' &&
-        !isBefore(t.date, bounds.periodStart) &&
-        !isAfter(t.date, now)
-      )
+      .filter(t => {
+        const d = t.effectiveDate ?? t.date
+        return t.budgetItemId === item.id &&
+          t.type === 'EXPENSE' &&
+          !isBefore(d, bounds.periodStart) &&
+          !isAfter(d, bounds.periodEnd)
+      })
       .reduce((sum, t) => sum + t.amount, 0)
 
     const remaining = item.amount - spent
@@ -196,14 +231,22 @@ export async function GET(req: Request) {
         balance += t.type === 'INCOME' ? t.amount : -t.amount
       }
     } else {
-      // Projected: use income schedules and budget allocations
+      // Projected: use income schedules and budget allocations.
+      // Deduplicate: if actual transactions cover a budget/income item
+      // in this period with the same amount, suppress the projection
+      // (the actual transaction is already shown). Show both if amounts differ.
       for (const inc of incomes) {
         if (!inc.active) continue
         if (isBefore(day, inc.startDate)) continue
         if (inc.endDate && isAfter(day, inc.endDate)) continue
         if (hitsDay(inc.frequency as Frequency, inc.startDate, day)) {
-          incomeEvents.push({ name: inc.name, amount: inc.amount })
-          balance += inc.amount
+          const received = periodReceivedFor(inc.id, inc.frequency as Frequency, inc.startDate)
+          if (received > 0 && received === inc.amount) {
+            // Fully covered by actual transaction — skip projection
+          } else {
+            incomeEvents.push({ name: inc.name, amount: inc.amount })
+            balance += inc.amount
+          }
         }
       }
       for (const item of budgetItems) {
@@ -211,8 +254,13 @@ export async function GET(req: Request) {
         if (isBefore(day, item.startDate)) continue
         if (item.endDate && isAfter(day, item.endDate)) continue
         if (hitsDay(item.frequency as Frequency, item.startDate, day)) {
-          budgetEvents.push({ id: item.id, name: item.name, category: item.category, amount: item.amount })
-          balance -= item.amount
+          const spent = periodSpentFor(item.id, item.frequency as Frequency, item.startDate)
+          if (spent > 0 && spent === item.amount) {
+            // Fully covered by actual transaction — skip projection
+          } else {
+            budgetEvents.push({ id: item.id, name: item.name, category: item.category, amount: item.amount })
+            balance -= item.amount
+          }
         }
       }
 
