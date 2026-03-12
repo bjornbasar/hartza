@@ -155,8 +155,8 @@ export async function GET(req: Request) {
 
   // For dedup: compute how much each budget/income item is covered by actual
   // transactions in the current period (so projections can be suppressed)
-  function periodSpentFor(itemId: string, freq: Frequency, startDate: Date): number {
-    const bounds = currentPeriodBounds(freq, startDate, now)
+  function periodSpentFor(itemId: string, freq: Frequency, startDate: Date, refDay: Date): number {
+    const bounds = currentPeriodBounds(freq, startDate, refDay)
     if (!bounds) return 0
     return allTransactions
       .filter(t => {
@@ -168,8 +168,8 @@ export async function GET(req: Request) {
       })
       .reduce((sum, t) => sum + t.amount, 0)
   }
-  function periodReceivedFor(incId: string, freq: Frequency, startDate: Date): number {
-    const bounds = currentPeriodBounds(freq, startDate, now)
+  function periodReceivedFor(incId: string, freq: Frequency, startDate: Date, refDay: Date): number {
+    const bounds = currentPeriodBounds(freq, startDate, refDay)
     if (!bounds) return 0
     return allTransactions
       .filter(t => {
@@ -240,7 +240,7 @@ export async function GET(req: Request) {
         if (isBefore(day, inc.startDate)) continue
         if (inc.endDate && isAfter(day, inc.endDate)) continue
         if (hitsDay(inc.frequency as Frequency, inc.startDate, day)) {
-          const received = periodReceivedFor(inc.id, inc.frequency as Frequency, inc.startDate)
+          const received = periodReceivedFor(inc.id, inc.frequency as Frequency, inc.startDate, day)
           if (received > 0 && received === inc.amount) {
             // Fully covered by actual transaction — skip projection
           } else {
@@ -254,7 +254,7 @@ export async function GET(req: Request) {
         if (isBefore(day, item.startDate)) continue
         if (item.endDate && isAfter(day, item.endDate)) continue
         if (hitsDay(item.frequency as Frequency, item.startDate, day)) {
-          const spent = periodSpentFor(item.id, item.frequency as Frequency, item.startDate)
+          const spent = periodSpentFor(item.id, item.frequency as Frequency, item.startDate, day)
           if (spent > 0 && spent === item.amount) {
             // Fully covered by actual transaction — skip projection
           } else {
