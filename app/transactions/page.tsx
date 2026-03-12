@@ -260,8 +260,8 @@ export default function TransactionsPage() {
                 <button
                   key={t}
                   onClick={() => setForm(t === 'EXPENSE'
-                    ? { ...form, type: 'EXPENSE', budgetItemId: '', incomeId: '' }
-                    : { ...form, type: 'INCOME',  budgetItemId: '', incomeId: '' }
+                    ? { ...form, type: 'EXPENSE', budgetItemId: '', incomeId: '', effectiveDate: form.effectiveDate }
+                    : { ...form, type: 'INCOME',  budgetItemId: '', incomeId: '', effectiveDate: form.effectiveDate }
                   )}
                   className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     form.type === t
@@ -346,23 +346,21 @@ export default function TransactionsPage() {
                 </label>
               </div>
 
-              {/* Effective date — shown when a budget item or income source is linked */}
-              {((form.type === 'EXPENSE' && form.budgetItemId) || (form.type === 'INCOME' && form.incomeId)) && (
-                <label className="block">
-                  <span className="text-xs text-slate-400 uppercase tracking-wider">
-                    Budget period date <span className="text-slate-600">(which period this counts toward)</span>
-                  </span>
-                  <input
-                    type="date"
-                    className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
-                    value={form.effectiveDate}
-                    onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })}
-                  />
-                  {!form.effectiveDate && (
-                    <p className="text-xs text-slate-600 mt-1">Leave blank to use the transaction date</p>
-                  )}
-                </label>
-              )}
+              {/* Effective date — always visible */}
+              <label className="block">
+                <span className="text-xs text-slate-400 uppercase tracking-wider">
+                  Budget period date <span className="text-slate-600">(optional — which period this counts toward)</span>
+                </span>
+                <input
+                  type="date"
+                  className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+                  value={form.effectiveDate}
+                  onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })}
+                />
+                {!form.effectiveDate && (
+                  <p className="text-xs text-slate-600 mt-1">Leave blank to use the transaction date</p>
+                )}
+              </label>
 
               <label className="block">
                 <span className="text-xs text-slate-400 uppercase tracking-wider">
