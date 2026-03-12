@@ -98,9 +98,10 @@ export async function GET(req: Request) {
   // --- Load data ---
   // Load transactions from the earlier of `from` or `balanceDate` so we can
   // reconstruct the balance in both directions from the anchor point.
-  // We load broadly by date OR effectiveDate, then sort by effective date.
+  // Cashflow plots by transaction date (when money actually moved).
+  // effectiveDate is only used for budget period matching in /api/summary.
   const txnStart = isBefore(from, balanceDate) ? from : balanceDate
-  const [incomes, budgetItems, rawTransactions] = await Promise.all([
+  const [incomes, budgetItems, allTransactions] = await Promise.all([
     prisma.income.findMany({ where: { active: true, householdId } }),
     prisma.budgetItem.findMany({ where: { active: true, householdId } }),
     prisma.transaction.findMany({
@@ -112,39 +113,29 @@ export async function GET(req: Request) {
       orderBy: { date: 'asc' },
     }),
   ])
-  // Sort by effective date for correct balance reconstruction
-  const allTransactions = rawTransactions.sort((a, b) => {
-    const da = (a.effectiveDate ?? a.date).getTime()
-    const db = (b.effectiveDate ?? b.date).getTime()
-    return da - db
-  })
 
   // Compute opening balance at `from` by replaying transactions between
   // the anchor date and `from` (forward or backward depending on order).
-  // Use effectiveDate for period placement but fall back to date.
   let openingBalance = startingBalance
   if (isBefore(from, balanceDate)) {
     // View starts before anchor — subtract transactions between from..balanceDate
     for (const t of allTransactions) {
-      const d = t.effectiveDate ?? t.date
-      if (d >= balanceDate) break
+      if (t.date >= balanceDate) break
       openingBalance -= t.type === 'INCOME' ? t.amount : -t.amount
     }
   } else {
     // View starts at or after anchor — add transactions between balanceDate..from
     for (const t of allTransactions) {
-      const d = t.effectiveDate ?? t.date
-      if (d >= from) break
+      if (t.date >= from) break
       openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
     }
   }
 
-  // Index in-range transactions by effective date (falls back to transaction date)
+  // Index in-range transactions by transaction date (when money moved)
   const txnsByDay = new Map<DayKey, ActualEvent[]>()
   for (const t of allTransactions) {
-    const d = t.effectiveDate ?? t.date
-    if (d < from || d > to) continue
-    const key = format(d, 'yyyy-MM-dd')
+    if (t.date < from || t.date > to) continue
+    const key = format(t.date, 'yyyy-MM-dd')
     if (!txnsByDay.has(key)) txnsByDay.set(key, [])
     txnsByDay.get(key)!.push({
       type: t.type,
@@ -169,13 +160,12 @@ export async function GET(req: Request) {
     if (!isAfter(bounds.periodEnd, now)) continue // period already ended
 
     const spent = allTransactions
-      .filter(t => {
-        const d = t.effectiveDate ?? t.date
-        return t.budgetItemId === item.id &&
-          t.type === 'EXPENSE' &&
-          !isBefore(d, bounds.periodStart) &&
-          !isAfter(d, now)
-      })
+      .filter(t =>
+        t.budgetItemId === item.id &&
+        t.type === 'EXPENSE' &&
+        !isBefore(t.date, bounds.periodStart) &&
+        !isAfter(t.date, now)
+      )
       .reduce((sum, t) => sum + t.amount, 0)
 
     const remaining = item.amount - spent
