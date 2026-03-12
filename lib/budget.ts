@@ -56,6 +56,18 @@ export function getCurrentPeriod(
   }
 }
 
+/**
+ * Returns the start of the next period after the current one.
+ */
+export function getNextPeriodStart(
+  frequency: Frequency,
+  startDate: Date,
+  ref: Date = new Date(),
+): Date {
+  const current = getCurrentPeriod(frequency, startDate, ref)
+  return addDays(current.end, 1)
+}
+
 export function periodLabel(frequency: Frequency): string {
   switch (frequency) {
     case 'WEEKLY':

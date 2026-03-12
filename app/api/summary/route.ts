@@ -45,13 +45,14 @@ export async function GET() {
     const hasStarted = !isBefore(now, item.startDate)
     const spent = item.transactions
       .filter(t => {
+        const d = t.effectiveDate ?? t.date
         if (freq === 'ONE_OFF') return true
         if (!hasStarted) {
           // Pre-start: count transactions up to startDate (advance payments)
-          return isBefore(t.date, item.startDate) || !isAfter(t.date, item.startDate)
+          return isBefore(d, item.startDate) || !isAfter(d, item.startDate)
         }
         // Active: only count transactions within current period
-        return !isBefore(t.date, period.start) && !isAfter(t.date, period.end)
+        return !isBefore(d, period.start) && !isAfter(d, period.end)
       })
       .reduce((s, t) => s + t.amount, 0)
     const remaining = periodBudget - spent

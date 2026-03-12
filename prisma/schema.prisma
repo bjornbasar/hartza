@@ -95,12 +95,13 @@ model BudgetItem {
 }
 
 model Transaction {
-  id           String          @id @default(cuid())
-  type         TransactionType @default(EXPENSE)
-  amount       Float
-  date         DateTime        @db.Date
-  description  String?
-  householdId  String
+  id            String          @id @default(cuid())
+  type          TransactionType @default(EXPENSE)
+  amount        Float
+  date          DateTime        @db.Date
+  effectiveDate DateTime?       @db.Date
+  description   String?
+  householdId   String
   household    Household       @relation(fields: [householdId], references: [id])
   // EXPENSE: link to budget item (required for expenses)
   budgetItemId String?

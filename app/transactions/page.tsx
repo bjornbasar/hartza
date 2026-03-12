@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns'
+import { format, parseISO, startOfMonth, endOfMonth, isBefore, isAfter } from 'date-fns'
 import { Frequency } from '@prisma/client'
-import { frequencyLabel } from '@/lib/budget'
+import { frequencyLabel, getCurrentPeriod, getNextPeriodStart } from '@/lib/budget'
 
-type BudgetItem = { id: string; name: string; category: string | null; frequency: Frequency; amount: number }
+type BudgetItem = { id: string; name: string; category: string | null; frequency: Frequency; amount: number; startDate: string }
 type IncomeSource = { id: string; name: string; amount: number; frequency: Frequency }
 
 type Transaction = {
@@ -13,6 +13,7 @@ type Transaction = {
   type: 'EXPENSE' | 'INCOME'
   amount: number
   date: string
+  effectiveDate: string | null
   description: string | null
   budgetItemId: string | null
   incomeId: string | null
@@ -22,8 +23,8 @@ type Transaction = {
 
 const today = format(new Date(), 'yyyy-MM-dd')
 
-const EMPTY_EXPENSE = { type: 'EXPENSE' as const, amount: 0, date: today, description: '', budgetItemId: '', incomeId: '' }
-const EMPTY_INCOME  = { type: 'INCOME'  as const, amount: 0, date: today, description: '', budgetItemId: '', incomeId: '' }
+const EMPTY_EXPENSE = { type: 'EXPENSE' as const, amount: 0, date: today, effectiveDate: '', description: '', budgetItemId: '', incomeId: '' }
+const EMPTY_INCOME  = { type: 'INCOME'  as const, amount: 0, date: today, effectiveDate: '', description: '', budgetItemId: '', incomeId: '' }
 
 function fmt(n: number) {
   return n.toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
@@ -82,6 +83,7 @@ export default function TransactionsPage() {
       type: t.type,
       amount: t.amount,
       date: format(parseISO(t.date), 'yyyy-MM-dd'),
+      effectiveDate: t.effectiveDate ? format(parseISO(t.effectiveDate), 'yyyy-MM-dd') : '',
       description: t.description ?? '',
       budgetItemId: t.budgetItemId ?? '',
       incomeId: t.incomeId ?? '',
@@ -89,12 +91,31 @@ export default function TransactionsPage() {
     setShowForm(true)
   }
 
+  function suggestEffectiveDate(txnDate: string, budgetItemId: string): string {
+    if (!budgetItemId || !txnDate) return ''
+    const bi = budgetItems.find(b => b.id === budgetItemId)
+    if (!bi || bi.frequency === 'ONE_OFF') return ''
+
+    const d = parseISO(txnDate)
+    const biStart = parseISO(bi.startDate)
+    const period = getCurrentPeriod(bi.frequency, biStart, d)
+
+    // If transaction date falls within the current period → default to period start
+    if (!isBefore(d, period.start) && !isAfter(d, period.end)) {
+      return format(period.start, 'yyyy-MM-dd')
+    }
+    // Outside current period → suggest next period start
+    const next = getNextPeriodStart(bi.frequency, biStart, d)
+    return format(next, 'yyyy-MM-dd')
+  }
+
   async function save() {
     setSaving(true)
+    const effectiveDate = form.effectiveDate || null
     const payload =
       form.type === 'EXPENSE'
-        ? { type: 'EXPENSE', amount: Number(form.amount), date: form.date, description: form.description || null, budgetItemId: form.budgetItemId }
-        : { type: 'INCOME',  amount: Number(form.amount), date: form.date, description: form.description || null, incomeId: form.incomeId || null }
+        ? { type: 'EXPENSE', amount: Number(form.amount), date: form.date, effectiveDate, description: form.description || null, budgetItemId: form.budgetItemId }
+        : { type: 'INCOME',  amount: Number(form.amount), date: form.date, effectiveDate, description: form.description || null, incomeId: form.incomeId || null }
 
     if (editing) {
       await fetch(`/api/transactions/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -204,6 +225,11 @@ export default function TransactionsPage() {
                               ? <><span className="text-slate-400">{t.budgetItem.name}</span>{t.budgetItem.category && <span className="text-slate-600"> · {t.budgetItem.category}</span>}</>
                               : <span className="text-amber-600/80 italic">Unplanned</span>
                           }
+                          {t.effectiveDate && t.effectiveDate !== t.date && (
+                            <span className="text-blue-500/70 ml-1.5" title="Budget period date">
+                              → {format(parseISO(t.effectiveDate), 'dd MMM')}
+                            </span>
+                          )}
                         </p>
                       </div>
 
@@ -258,7 +284,11 @@ export default function TransactionsPage() {
                   <select
                     className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
                     value={form.budgetItemId}
-                    onChange={(e) => setForm({ ...form, budgetItemId: e.target.value })}
+                    onChange={(e) => {
+                      const bid = e.target.value
+                      const suggested = suggestEffectiveDate(form.date, bid)
+                      setForm({ ...form, budgetItemId: bid, effectiveDate: suggested })
+                    }}
                   >
                     <option value="">Unplanned</option>
                     {budgetItems.map((b) => (
@@ -307,10 +337,32 @@ export default function TransactionsPage() {
                     type="date"
                     className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
                     value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    onChange={(e) => {
+                      const newDate = e.target.value
+                      const suggested = form.type === 'EXPENSE' ? suggestEffectiveDate(newDate, form.budgetItemId) : ''
+                      setForm({ ...form, date: newDate, effectiveDate: suggested })
+                    }}
                   />
                 </label>
               </div>
+
+              {/* Effective date — shown when a budget item or income source is linked */}
+              {((form.type === 'EXPENSE' && form.budgetItemId) || (form.type === 'INCOME' && form.incomeId)) && (
+                <label className="block">
+                  <span className="text-xs text-slate-400 uppercase tracking-wider">
+                    Budget period date <span className="text-slate-600">(which period this counts toward)</span>
+                  </span>
+                  <input
+                    type="date"
+                    className="mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+                    value={form.effectiveDate}
+                    onChange={(e) => setForm({ ...form, effectiveDate: e.target.value })}
+                  />
+                  {!form.effectiveDate && (
+                    <p className="text-xs text-slate-600 mt-1">Leave blank to use the transaction date</p>
+                  )}
+                </label>
+              )}
 
               <label className="block">
                 <span className="text-xs text-slate-400 uppercase tracking-wider">
