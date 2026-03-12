@@ -242,7 +242,8 @@ export async function GET(req: Request) {
         if (hitsDay(inc.frequency as Frequency, inc.startDate, day)) {
           const received = periodReceivedFor(inc.id, inc.frequency as Frequency, inc.startDate, day)
           if (received > 0 && received === inc.amount) {
-            // Fully covered by actual transaction — skip projection
+            // Fully covered by actual transaction — skip projection, use actual for balance
+            balance += received
           } else {
             incomeEvents.push({ name: inc.name, amount: inc.amount })
             balance += inc.amount
@@ -256,7 +257,8 @@ export async function GET(req: Request) {
         if (hitsDay(item.frequency as Frequency, item.startDate, day)) {
           const spent = periodSpentFor(item.id, item.frequency as Frequency, item.startDate, day)
           if (spent > 0 && spent === item.amount) {
-            // Fully covered by actual transaction — skip projection
+            // Fully covered by actual transaction — skip projection, use actual for balance
+            balance -= spent
           } else {
             budgetEvents.push({ id: item.id, name: item.name, category: item.category, amount: item.amount })
             balance -= item.amount
