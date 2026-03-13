@@ -96,14 +96,13 @@ export async function GET(req: Request) {
   const balanceDate     = config?.balanceDate ? startOfDay(config.balanceDate) : now
 
   // --- Load data ---
-  // Load transactions from the earlier of `from` or `balanceDate` so we can
-  // reconstruct the balance in both directions from the anchor point.
-  const txnStart = isBefore(from, balanceDate) ? from : balanceDate
+  // Balance anchor is a hard reset — ignore all transactions before it.
+  // Only load transactions from the anchor date onward.
   const [incomes, budgetItems, rawTransactions] = await Promise.all([
     prisma.income.findMany({ where: { active: true, householdId } }),
     prisma.budgetItem.findMany({ where: { active: true, householdId } }),
     prisma.transaction.findMany({
-      where: { householdId, date: { gte: txnStart } },
+      where: { householdId, date: { gte: balanceDate } },
       include: {
         budgetItem: { select: { name: true } },
         income:     { select: { name: true } },
@@ -118,21 +117,13 @@ export async function GET(req: Request) {
     return da - db
   })
 
-  // Compute opening balance at `from` by replaying transactions between
-  // the anchor date and `from` (forward or backward depending on order).
+  // Compute opening balance at `from` by replaying transactions from
+  // the anchor date up to `from`.
   let openingBalance = startingBalance
-  if (isBefore(from, balanceDate)) {
-    for (const t of allTransactions) {
-      const d = startOfDay(t.effectiveDate ?? t.date)
-      if (!isBefore(d, balanceDate)) break
-      openingBalance -= t.type === 'INCOME' ? t.amount : -t.amount
-    }
-  } else {
-    for (const t of allTransactions) {
-      const d = startOfDay(t.effectiveDate ?? t.date)
-      if (!isBefore(d, from)) break
-      openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
-    }
+  for (const t of allTransactions) {
+    const d = startOfDay(t.effectiveDate ?? t.date)
+    if (!isBefore(d, from)) break
+    openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
   }
 
   // Index in-range transactions by effective date (or transaction date)
