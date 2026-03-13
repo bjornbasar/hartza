@@ -86,8 +86,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const now = normalizeDate(new Date())
 
-  const from = searchParams.get('from') ? parseISO(searchParams.get('from')!) : startOfMonth(now)
-  const to   = searchParams.get('to')   ? parseISO(searchParams.get('to')!)   : endOfMonth(now)
+  const from = normalizeDate(searchParams.get('from') ? parseISO(searchParams.get('from')!) : startOfMonth(now))
+  const to   = normalizeDate(searchParams.get('to')   ? parseISO(searchParams.get('to')!)   : endOfMonth(now))
 
   // --- Config (starting balance) ---
   const config = await prisma.config.findUnique({ where: { householdId } })
@@ -231,7 +231,8 @@ export async function GET(req: Request) {
   const days = eachDayOfInterval({ start: from, end: to })
   let balance = openingBalance
 
-  const series = days.map((day) => {
+  const series = days.map((rawDay) => {
+    const day = normalizeDate(rawDay)
     const key    = format(day, 'yyyy-MM-dd')
     const isPast = !isAfter(day, now)
 
