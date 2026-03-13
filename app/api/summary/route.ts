@@ -68,7 +68,21 @@ export async function GET() {
           return isBefore(d, item.startDate) || !isAfter(d, item.startDate)
         }
         // Active: only count transactions within current period
-        return !isBefore(d, period.start) && !isAfter(d, period.end)
+        const inPeriod = !isBefore(d, period.start) && !isAfter(d, period.end)
+        if (item.name === 'Rent') {
+          console.log('RENT DEBUG', {
+            txId: t.id,
+            effectiveDate: t.effectiveDate?.toISOString(),
+            date: t.date.toISOString(),
+            d: d.toISOString(),
+            periodStart: period.start.toISOString(),
+            periodEnd: period.end.toISOString(),
+            isBefore: isBefore(d, period.start),
+            isAfter: isAfter(d, period.end),
+            inPeriod,
+          })
+        }
+        return inPeriod
       })
       .reduce((s, t) => s + t.amount, 0)
     const remaining = periodBudget - spent
