@@ -10,7 +10,7 @@ export async function GET() {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const now = startOfDay(new Date())
+  const now = normalizeDate(new Date())
   const { householdId } = session
 
   // --- Income ---
