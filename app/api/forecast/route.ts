@@ -96,8 +96,8 @@ export async function GET(req: Request) {
 
   // --- Load data ---
   // Balance anchor is a hard reset — ignore all transactions before it.
-  // Only load transactions from the anchor date onward.
-  const [rawIncomes, rawBudgetItems, rawTransactions] = await Promise.all([
+  // Load transactions from anchor onward (for balance) + all transactions (for dedup)
+  const [rawIncomes, rawBudgetItems, rawTransactions, rawAllTransactions] = await Promise.all([
     prisma.income.findMany({ where: { active: true, householdId } }),
     prisma.budgetItem.findMany({ where: { active: true, householdId } }),
     prisma.transaction.findMany({
@@ -107,6 +107,10 @@ export async function GET(req: Request) {
         income:     { select: { name: true } },
       },
       orderBy: { date: 'asc' },
+    }),
+    prisma.transaction.findMany({
+      where: { householdId },
+      select: { budgetItemId: true, incomeId: true, type: true, date: true, effectiveDate: true, amount: true },
     }),
   ])
 
@@ -137,6 +141,13 @@ export async function GET(req: Request) {
       const db = (b.effectiveDate ?? b.date).getTime()
       return da - db
     })
+
+  // Unfiltered transactions for dedup checks (includes pre-anchor payments)
+  const allTransactionsUnfiltered = rawAllTransactions.map(t => ({
+    ...t,
+    date: normalizeDate(t.date),
+    effectiveDate: t.effectiveDate ? normalizeDate(t.effectiveDate) : null,
+  }))
 
   // Compute opening balance at `from` by replaying transactions from
   // the anchor date up to `from`.
@@ -170,7 +181,7 @@ export async function GET(req: Request) {
   function periodSpentFor(itemId: string, freq: Frequency, startDate: Date, refDay: Date): number {
     const bounds = currentPeriodBounds(freq, startDate, refDay)
     if (!bounds) return 0
-    return allTransactions
+    return allTransactionsUnfiltered
       .filter(t => {
         const d = t.effectiveDate ?? t.date
         return t.budgetItemId === itemId &&
@@ -183,7 +194,7 @@ export async function GET(req: Request) {
   function periodReceivedFor(incId: string, freq: Frequency, startDate: Date, refDay: Date): number {
     const bounds = currentPeriodBounds(freq, startDate, refDay)
     if (!bounds) return 0
-    return allTransactions
+    return allTransactionsUnfiltered
       .filter(t => {
         const d = t.effectiveDate ?? t.date
         return t.incomeId === incId &&
@@ -204,7 +215,7 @@ export async function GET(req: Request) {
     const bounds = currentPeriodBounds(item.frequency as Frequency, item.startDate, now)
     if (!bounds) continue
     if (!isAfter(bounds.periodEnd, now)) continue // period already ended
-    const spent = allTransactions
+    const spent = allTransactionsUnfiltered
       .filter(t => {
         const d = t.effectiveDate ?? t.date
         return t.budgetItemId === item.id &&
