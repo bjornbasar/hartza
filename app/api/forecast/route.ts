@@ -17,6 +17,7 @@ import {
   endOfMonth,
   startOfDay,
 } from 'date-fns'
+import { normalizeDate } from '@/lib/dates'
 
 type DayKey = string
 
@@ -93,12 +94,12 @@ export async function GET(req: Request) {
   // --- Config (starting balance) ---
   const config = await prisma.config.findUnique({ where: { householdId } })
   const startingBalance = config?.startingBalance ?? 0
-  const balanceDate     = config?.balanceDate ? startOfDay(config.balanceDate) : now
+  const balanceDate     = config?.balanceDate ? normalizeDate(config.balanceDate) : now
 
   // --- Load data ---
   // Balance anchor is a hard reset — ignore all transactions before it.
   // Only load transactions from the anchor date onward.
-  const [incomes, budgetItems, rawTransactions] = await Promise.all([
+  const [rawIncomes, rawBudgetItems, rawTransactions] = await Promise.all([
     prisma.income.findMany({ where: { active: true, householdId } }),
     prisma.budgetItem.findMany({ where: { active: true, householdId } }),
     prisma.transaction.findMany({
@@ -110,14 +111,32 @@ export async function GET(req: Request) {
       orderBy: { date: 'asc' },
     }),
   ])
+
+  // Normalize all Prisma dates to UTC midnight to avoid timezone shifts
+  const incomes = rawIncomes.map(i => ({
+    ...i,
+    startDate: normalizeDate(i.startDate),
+    endDate: i.endDate ? normalizeDate(i.endDate) : null,
+  }))
+  const budgetItems = rawBudgetItems.map(b => ({
+    ...b,
+    startDate: normalizeDate(b.startDate),
+    endDate: b.endDate ? normalizeDate(b.endDate) : null,
+  }))
+
   // Hard filter: exclude any transaction whose actual date is before the anchor.
   // The anchor balance already accounts for these — including them would double-count.
-  // Then sort by effective date for correct balance reconstruction.
+  // Normalize dates and sort by effective date for correct balance reconstruction.
   const allTransactions = rawTransactions
-    .filter(t => !isBefore(startOfDay(t.date), balanceDate))
+    .map(t => ({
+      ...t,
+      date: normalizeDate(t.date),
+      effectiveDate: t.effectiveDate ? normalizeDate(t.effectiveDate) : null,
+    }))
+    .filter(t => !isBefore(t.date, balanceDate))
     .sort((a, b) => {
-      const da = startOfDay(a.effectiveDate ?? a.date).getTime()
-      const db = startOfDay(b.effectiveDate ?? b.date).getTime()
+      const da = (a.effectiveDate ?? a.date).getTime()
+      const db = (b.effectiveDate ?? b.date).getTime()
       return da - db
     })
 
@@ -125,7 +144,7 @@ export async function GET(req: Request) {
   // the anchor date up to `from`.
   let openingBalance = startingBalance
   for (const t of allTransactions) {
-    const d = startOfDay(t.effectiveDate ?? t.date)
+    const d = t.effectiveDate ?? t.date
     if (!isBefore(d, from)) break
     openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
   }
@@ -133,7 +152,7 @@ export async function GET(req: Request) {
   // Index in-range transactions by effective date (or transaction date)
   const txnsByDay = new Map<DayKey, ActualEvent[]>()
   for (const t of allTransactions) {
-    const d = startOfDay(t.effectiveDate ?? t.date)
+    const d = t.effectiveDate ?? t.date
     if (isBefore(d, from) || isAfter(d, to)) continue
     const key = format(d, 'yyyy-MM-dd')
     if (!txnsByDay.has(key)) txnsByDay.set(key, [])
@@ -155,7 +174,7 @@ export async function GET(req: Request) {
     if (!bounds) return 0
     return allTransactions
       .filter(t => {
-        const d = startOfDay(t.effectiveDate ?? t.date)
+        const d = t.effectiveDate ?? t.date
         return t.budgetItemId === itemId &&
           t.type === 'EXPENSE' &&
           !isBefore(d, bounds.periodStart) &&
@@ -168,7 +187,7 @@ export async function GET(req: Request) {
     if (!bounds) return 0
     return allTransactions
       .filter(t => {
-        const d = startOfDay(t.effectiveDate ?? t.date)
+        const d = t.effectiveDate ?? t.date
         return t.incomeId === incId &&
           t.type === 'INCOME' &&
           !isBefore(d, bounds.periodStart) &&
@@ -192,7 +211,7 @@ export async function GET(req: Request) {
 
     const spent = allTransactions
       .filter(t => {
-        const d = startOfDay(t.effectiveDate ?? t.date)
+        const d = t.effectiveDate ?? t.date
         return t.budgetItemId === item.id &&
           t.type === 'EXPENSE' &&
           !isBefore(d, bounds.periodStart) &&

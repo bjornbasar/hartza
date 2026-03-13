@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
+import { toUTCDate } from '@/lib/dates'
 
 export async function GET() {
   const session = await requireSession()
@@ -27,12 +28,12 @@ export async function PUT(req: Request) {
     where: { householdId: session.householdId },
     update: {
       startingBalance: data.startingBalance,
-      balanceDate: data.balanceDate ? new Date(data.balanceDate) : null,
+      balanceDate: data.balanceDate ? toUTCDate(data.balanceDate) : null,
     },
     create: {
       householdId: session.householdId,
       startingBalance: data.startingBalance,
-      balanceDate: data.balanceDate ? new Date(data.balanceDate) : null,
+      balanceDate: data.balanceDate ? toUTCDate(data.balanceDate) : null,
     },
   })
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
+import { toUTCDate } from '@/lib/dates'
 
 const schema = z.object({
   name: z.string().min(1),
@@ -34,7 +35,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       targetAmount: data.targetAmount,
       amount: data.amount,
       frequency: data.frequency,
-      startDate: new Date(data.startDate),
+      startDate: toUTCDate(data.startDate),
       notes: data.notes ?? null,
       active: data.active ?? true,
     },

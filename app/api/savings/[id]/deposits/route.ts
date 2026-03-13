@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
+import { toUTCDate } from '@/lib/dates'
 
 const schema = z.object({
   amount: z.number().positive(),
@@ -26,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const deposit = await prisma.savingsDeposit.create({
     data: {
       amount: data.amount,
-      date: new Date(data.date),
+      date: toUTCDate(data.date),
       description: data.description ?? null,
       savingsGoalId: id,
     },

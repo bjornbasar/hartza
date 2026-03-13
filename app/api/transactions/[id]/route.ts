@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
+import { toUTCDate } from '@/lib/dates'
 
 const schema = z.discriminatedUnion('type', [
   z.object({
@@ -43,8 +44,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         ? {
             type: 'EXPENSE',
             amount: data.amount,
-            date: new Date(data.date),
-            effectiveDate: data.effectiveDate ? new Date(data.effectiveDate) : null,
+            date: toUTCDate(data.date),
+            effectiveDate: data.effectiveDate ? toUTCDate(data.effectiveDate) : null,
             description: data.description ?? null,
             budgetItemId: data.budgetItemId || null,
             incomeId: null,
@@ -52,8 +53,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         : {
             type: 'INCOME',
             amount: data.amount,
-            date: new Date(data.date),
-            effectiveDate: data.effectiveDate ? new Date(data.effectiveDate) : null,
+            date: toUTCDate(data.date),
+            effectiveDate: data.effectiveDate ? toUTCDate(data.effectiveDate) : null,
             description: data.description ?? null,
             incomeId: data.incomeId ?? null,
             budgetItemId: null,

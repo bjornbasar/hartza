@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
 import { z } from 'zod'
+import { toUTCDate, normalizeDate } from '@/lib/dates'
 
 const schema = z.discriminatedUnion('type', [
   z.object({
@@ -35,8 +36,8 @@ export async function GET(req: Request) {
   if (budgetItemId) where.budgetItemId = budgetItemId
   if (from || to) {
     where.date = {
-      ...(from ? { gte: new Date(from) } : {}),
-      ...(to   ? { lte: new Date(to) }   : {}),
+      ...(from ? { gte: toUTCDate(from) } : {}),
+      ...(to   ? { lte: toUTCDate(to) }   : {}),
     }
   }
 
@@ -49,7 +50,14 @@ export async function GET(req: Request) {
     orderBy: { date: 'desc' },
   })
 
-  return NextResponse.json(items)
+  // Normalize dates to UTC midnight for consistent client display
+  const normalized = items.map(t => ({
+    ...t,
+    date: normalizeDate(t.date),
+    effectiveDate: t.effectiveDate ? normalizeDate(t.effectiveDate) : null,
+  }))
+
+  return NextResponse.json(normalized)
 }
 
 export async function POST(req: Request) {
@@ -65,8 +73,8 @@ export async function POST(req: Request) {
         ? {
             type: 'EXPENSE',
             amount: data.amount,
-            date: new Date(data.date),
-            effectiveDate: data.effectiveDate ? new Date(data.effectiveDate) : null,
+            date: toUTCDate(data.date),
+            effectiveDate: data.effectiveDate ? toUTCDate(data.effectiveDate) : null,
             description: data.description ?? null,
             budgetItemId: data.budgetItemId || null,
             householdId: session.householdId,
@@ -74,8 +82,8 @@ export async function POST(req: Request) {
         : {
             type: 'INCOME',
             amount: data.amount,
-            date: new Date(data.date),
-            effectiveDate: data.effectiveDate ? new Date(data.effectiveDate) : null,
+            date: toUTCDate(data.date),
+            effectiveDate: data.effectiveDate ? toUTCDate(data.effectiveDate) : null,
             description: data.description ?? null,
             incomeId: data.incomeId ?? null,
             householdId: session.householdId,

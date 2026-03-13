@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth'
 import { getCurrentPeriod, toMonthly, isActiveOn } from '@/lib/budget'
 import { Frequency } from '@prisma/client'
 import { format, isBefore, isAfter, startOfDay } from 'date-fns'
+import { normalizeDate } from '@/lib/dates'
 
 export async function GET() {
   const session = await requireSession()
@@ -13,7 +14,12 @@ export async function GET() {
   const { householdId } = session
 
   // --- Income ---
-  const incomes = await prisma.income.findMany({ where: { active: true, householdId } })
+  const rawIncomes = await prisma.income.findMany({ where: { active: true, householdId } })
+  const incomes = rawIncomes.map(i => ({
+    ...i,
+    startDate: normalizeDate(i.startDate),
+    endDate: i.endDate ? normalizeDate(i.endDate) : null,
+  }))
 
   let monthlyIncome = 0
   for (const inc of incomes) {
@@ -22,10 +28,20 @@ export async function GET() {
   }
 
   // --- Budget items with current-period spend ---
-  const budgetItems = await prisma.budgetItem.findMany({
+  const rawBudgetItems = await prisma.budgetItem.findMany({
     where: { active: true, householdId },
     include: { transactions: { where: { householdId } } },
   })
+  const budgetItems = rawBudgetItems.map(b => ({
+    ...b,
+    startDate: normalizeDate(b.startDate),
+    endDate: b.endDate ? normalizeDate(b.endDate) : null,
+    transactions: b.transactions.map(t => ({
+      ...t,
+      date: normalizeDate(t.date),
+      effectiveDate: t.effectiveDate ? normalizeDate(t.effectiveDate) : null,
+    })),
+  }))
 
   let monthlyBudget = 0
   const itemSummaries = []
@@ -45,7 +61,7 @@ export async function GET() {
     const hasStarted = !isBefore(now, item.startDate)
     const spent = item.transactions
       .filter(t => {
-        const d = startOfDay(t.effectiveDate ?? t.date)
+        const d = t.effectiveDate ?? t.date
         if (freq === 'ONE_OFF') return true
         if (!hasStarted) {
           // Pre-start: count transactions up to startDate (advance payments)
