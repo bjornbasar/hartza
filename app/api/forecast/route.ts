@@ -204,9 +204,6 @@ export async function GET(req: Request) {
     const bounds = currentPeriodBounds(item.frequency as Frequency, item.startDate, now)
     if (!bounds) continue
     if (!isAfter(bounds.periodEnd, now)) continue // period already ended
-    // Skip if the period ended before the anchor — anchor balance already covers it
-    if (isBefore(bounds.periodEnd, balanceDate)) continue
-
     const spent = allTransactions
       .filter(t => {
         const d = t.effectiveDate ?? t.date
@@ -255,9 +252,6 @@ export async function GET(req: Request) {
         if (isBefore(day, inc.startDate)) continue
         if (inc.endDate && isAfter(day, inc.endDate)) continue
         if (hitsDay(inc.frequency as Frequency, inc.startDate, day)) {
-          // Skip if this period started before anchor — already accounted for
-          const incBounds = currentPeriodBounds(inc.frequency as Frequency, inc.startDate, day)
-          if (incBounds && isBefore(incBounds.periodEnd, balanceDate)) continue
           const received = periodReceivedFor(inc.id, inc.frequency as Frequency, inc.startDate, day)
           if (received > 0 && received === inc.amount) {
             // Fully covered by actual transaction — skip projection, use actual for balance
@@ -273,9 +267,6 @@ export async function GET(req: Request) {
         if (isBefore(day, item.startDate)) continue
         if (item.endDate && isAfter(day, item.endDate)) continue
         if (hitsDay(item.frequency as Frequency, item.startDate, day)) {
-          // Skip if this period started before anchor — already accounted for
-          const itemBounds = currentPeriodBounds(item.frequency as Frequency, item.startDate, day)
-          if (itemBounds && isBefore(itemBounds.periodEnd, balanceDate)) continue
           const spent = periodSpentFor(item.id, item.frequency as Frequency, item.startDate, day)
           if (spent > 0 && spent === item.amount) {
             // Fully covered by actual transaction — skip projection, use actual for balance
