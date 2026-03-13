@@ -93,7 +93,7 @@ export async function GET(req: Request) {
   // --- Config (starting balance) ---
   const config = await prisma.config.findUnique({ where: { householdId } })
   const startingBalance = config?.startingBalance ?? 0
-  const balanceDate     = config?.balanceDate ?? now
+  const balanceDate     = config?.balanceDate ? startOfDay(config.balanceDate) : now
 
   // --- Load data ---
   // Load transactions from the earlier of `from` or `balanceDate` so we can
@@ -113,8 +113,8 @@ export async function GET(req: Request) {
   ])
   // Sort by effective date for correct balance reconstruction
   const allTransactions = rawTransactions.sort((a, b) => {
-    const da = (a.effectiveDate ?? a.date).getTime()
-    const db = (b.effectiveDate ?? b.date).getTime()
+    const da = startOfDay(a.effectiveDate ?? a.date).getTime()
+    const db = startOfDay(b.effectiveDate ?? b.date).getTime()
     return da - db
   })
 
@@ -123,14 +123,14 @@ export async function GET(req: Request) {
   let openingBalance = startingBalance
   if (isBefore(from, balanceDate)) {
     for (const t of allTransactions) {
-      const d = t.effectiveDate ?? t.date
-      if (d >= balanceDate) break
+      const d = startOfDay(t.effectiveDate ?? t.date)
+      if (!isBefore(d, balanceDate)) break
       openingBalance -= t.type === 'INCOME' ? t.amount : -t.amount
     }
   } else {
     for (const t of allTransactions) {
-      const d = t.effectiveDate ?? t.date
-      if (d >= from) break
+      const d = startOfDay(t.effectiveDate ?? t.date)
+      if (!isBefore(d, from)) break
       openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
     }
   }
@@ -138,8 +138,8 @@ export async function GET(req: Request) {
   // Index in-range transactions by effective date (or transaction date)
   const txnsByDay = new Map<DayKey, ActualEvent[]>()
   for (const t of allTransactions) {
-    const d = t.effectiveDate ?? t.date
-    if (d < from || d > to) continue
+    const d = startOfDay(t.effectiveDate ?? t.date)
+    if (isBefore(d, from) || isAfter(d, to)) continue
     const key = format(d, 'yyyy-MM-dd')
     if (!txnsByDay.has(key)) txnsByDay.set(key, [])
     txnsByDay.get(key)!.push({
@@ -160,7 +160,7 @@ export async function GET(req: Request) {
     if (!bounds) return 0
     return allTransactions
       .filter(t => {
-        const d = t.effectiveDate ?? t.date
+        const d = startOfDay(t.effectiveDate ?? t.date)
         return t.budgetItemId === itemId &&
           t.type === 'EXPENSE' &&
           !isBefore(d, bounds.periodStart) &&
@@ -173,7 +173,7 @@ export async function GET(req: Request) {
     if (!bounds) return 0
     return allTransactions
       .filter(t => {
-        const d = t.effectiveDate ?? t.date
+        const d = startOfDay(t.effectiveDate ?? t.date)
         return t.incomeId === incId &&
           t.type === 'INCOME' &&
           !isBefore(d, bounds.periodStart) &&
@@ -195,7 +195,7 @@ export async function GET(req: Request) {
 
     const spent = allTransactions
       .filter(t => {
-        const d = t.effectiveDate ?? t.date
+        const d = startOfDay(t.effectiveDate ?? t.date)
         return t.budgetItemId === item.id &&
           t.type === 'EXPENSE' &&
           !isBefore(d, bounds.periodStart) &&

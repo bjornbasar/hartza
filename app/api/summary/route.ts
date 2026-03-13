@@ -3,13 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { requireSession } from '@/lib/auth'
 import { getCurrentPeriod, toMonthly, isActiveOn } from '@/lib/budget'
 import { Frequency } from '@prisma/client'
-import { format, isBefore, isAfter } from 'date-fns'
+import { format, isBefore, isAfter, startOfDay } from 'date-fns'
 
 export async function GET() {
   const session = await requireSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const now = new Date()
+  const now = startOfDay(new Date())
   const { householdId } = session
 
   // --- Income ---
@@ -45,7 +45,7 @@ export async function GET() {
     const hasStarted = !isBefore(now, item.startDate)
     const spent = item.transactions
       .filter(t => {
-        const d = t.effectiveDate ?? t.date
+        const d = startOfDay(t.effectiveDate ?? t.date)
         if (freq === 'ONE_OFF') return true
         if (!hasStarted) {
           // Pre-start: count transactions up to startDate (advance payments)
