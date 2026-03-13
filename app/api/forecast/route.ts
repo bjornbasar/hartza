@@ -34,7 +34,7 @@ function currentPeriodBounds(
   startDate: Date,
   now: Date,
 ): { periodStart: Date; periodEnd: Date } | null {
-  if (frequency === 'ONE_OFF') return null
+  if (frequency === 'ONE_OFF') return { periodStart: startDate, periodEnd: startDate }
   if (isBefore(now, startDate)) return null // hasn't started yet
 
   switch (frequency) {
