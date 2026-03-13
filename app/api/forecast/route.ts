@@ -7,7 +7,6 @@ import {
   format,
   parseISO,
   isSameDay,
-  getDay,
   differenceInDays,
   isBefore,
   isAfter,
@@ -15,7 +14,6 @@ import {
   subDays,
   startOfMonth,
   endOfMonth,
-  startOfDay,
 } from 'date-fns'
 import { normalizeDate } from '@/lib/dates'
 
@@ -41,28 +39,28 @@ function currentPeriodBounds(
 
   switch (frequency) {
     case 'WEEKLY': {
-      const startDow = getDay(startDate)
-      const nowDow = getDay(now)
+      const startDow = startDate.getUTCDay()
+      const nowDow = now.getUTCDay()
       const daysSinceLast = ((nowDow - startDow) % 7 + 7) % 7
-      const periodStart = startOfDay(subDays(now, daysSinceLast))
-      const periodEnd = startOfDay(addDays(periodStart, 6))
+      const periodStart = subDays(now, daysSinceLast)
+      const periodEnd = addDays(periodStart, 6)
       return { periodStart, periodEnd }
     }
     case 'FORTNIGHTLY': {
       const diff = differenceInDays(now, startDate)
       const periodsElapsed = Math.floor(diff / 14)
-      const periodStart = startOfDay(addDays(startDate, periodsElapsed * 14))
-      const periodEnd = startOfDay(addDays(periodStart, 13))
+      const periodStart = addDays(startDate, periodsElapsed * 14)
+      const periodEnd = addDays(periodStart, 13)
       return { periodStart, periodEnd }
     }
     case 'MONTHLY': {
-      const day = startDate.getDate()
-      let periodStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), day))
+      const day = startDate.getUTCDate()
+      let periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day))
       if (isAfter(periodStart, now)) {
-        periodStart = startOfDay(new Date(now.getFullYear(), now.getMonth() - 1, day))
+        periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, day))
       }
-      const nextOcc = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, day)
-      const periodEnd = startOfDay(subDays(nextOcc, 1))
+      const nextOcc = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, day))
+      const periodEnd = subDays(nextOcc, 1)
       return { periodStart, periodEnd }
     }
   }
@@ -71,12 +69,12 @@ function currentPeriodBounds(
 function hitsDay(frequency: Frequency, startDate: Date, day: Date): boolean {
   switch (frequency) {
     case 'ONE_OFF':      return isSameDay(day, startDate)
-    case 'WEEKLY':       return getDay(day) === getDay(startDate)
+    case 'WEEKLY':       return day.getUTCDay() === startDate.getUTCDay()
     case 'FORTNIGHTLY': {
       const diff = differenceInDays(day, startDate)
       return diff >= 0 && diff % 14 === 0
     }
-    case 'MONTHLY':      return day.getDate() === startDate.getDate()
+    case 'MONTHLY':      return day.getUTCDate() === startDate.getUTCDate()
   }
 }
 
@@ -86,7 +84,7 @@ export async function GET(req: Request) {
 
   const { householdId } = session
   const { searchParams } = new URL(req.url)
-  const now = startOfDay(new Date())
+  const now = normalizeDate(new Date())
 
   const from = searchParams.get('from') ? parseISO(searchParams.get('from')!) : startOfMonth(now)
   const to   = searchParams.get('to')   ? parseISO(searchParams.get('to')!)   : endOfMonth(now)

@@ -1,10 +1,7 @@
 import { Frequency } from '@prisma/client'
 import {
-  startOfWeek,
-  endOfWeek,
-  startOfMonth,
-  endOfMonth,
   addDays,
+  subDays,
   differenceInDays,
   isBefore,
   isAfter,
@@ -22,11 +19,16 @@ export function getCurrentPeriod(
   ref: Date = new Date(),
 ): Period {
   switch (frequency) {
-    case 'WEEKLY':
+    case 'WEEKLY': {
+      const startDow = startDate.getUTCDay()
+      const refDow = ref.getUTCDay()
+      const daysSinceLast = ((refDow - startDow) % 7 + 7) % 7
+      const periodStart = subDays(ref, daysSinceLast)
       return {
-        start: startOfWeek(ref, { weekStartsOn: 1 }), // Monday
-        end: endOfWeek(ref, { weekStartsOn: 1 }),
+        start: periodStart,
+        end: addDays(periodStart, 6),
       }
+    }
 
     case 'FORTNIGHTLY': {
       const daysDiff = differenceInDays(ref, startDate)
@@ -42,11 +44,19 @@ export function getCurrentPeriod(
       }
     }
 
-    case 'MONTHLY':
-      return {
-        start: startOfMonth(ref),
-        end: endOfMonth(ref),
+    case 'MONTHLY': {
+      const day = startDate.getUTCDate()
+      let periodStart = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), day))
+      if (isAfter(periodStart, ref)) {
+        periodStart = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() - 1, day))
       }
+      const nextOcc = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, day))
+      const periodEnd = subDays(nextOcc, 1)
+      return {
+        start: periodStart,
+        end: periodEnd,
+      }
+    }
 
     case 'ONE_OFF':
       return {
@@ -148,8 +158,8 @@ export function getPeriodsElapsed(
       return Math.floor(days / 14) + 1
     case 'MONTHLY': {
       const months =
-        (effective.getFullYear() - startDate.getFullYear()) * 12 +
-        (effective.getMonth() - startDate.getMonth())
+        (effective.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
+        (effective.getUTCMonth() - startDate.getUTCMonth())
       return Math.max(months, 0) + 1
     }
   }
