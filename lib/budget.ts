@@ -20,6 +20,9 @@ export function getCurrentPeriod(
 ): Period {
   switch (frequency) {
     case 'WEEKLY': {
+      if (isBefore(ref, startDate)) {
+        return { start: startDate, end: addDays(startDate, 6) }
+      }
       const startDow = startDate.getUTCDay()
       const refDow = ref.getUTCDay()
       const daysSinceLast = ((refDow - startDow) % 7 + 7) % 7
@@ -45,6 +48,10 @@ export function getCurrentPeriod(
     }
 
     case 'MONTHLY': {
+      if (isBefore(ref, startDate)) {
+        const nextMonth = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, startDate.getUTCDate()))
+        return { start: startDate, end: subDays(nextMonth, 1) }
+      }
       const day = startDate.getUTCDate()
       let periodStart = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), day))
       if (isAfter(periodStart, ref)) {
@@ -122,11 +129,11 @@ export function toMonthly(amount: number, frequency: Frequency): number {
 }
 
 export function isActiveOn(
-  _startDate: Date,
+  startDate: Date,
   endDate: Date | null,
   ref: Date = new Date(),
 ): boolean {
-  // Items are visible even before startDate (allow early payments)
+  if (startDate && isBefore(ref, startDate)) return false
   if (endDate && isAfter(ref, endDate)) return false
   return true
 }

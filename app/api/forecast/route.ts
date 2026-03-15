@@ -137,8 +137,8 @@ export async function GET(req: Request) {
     }))
     .filter(t => !isBefore(t.date, balanceDate))
     .sort((a, b) => {
-      const da = (a.effectiveDate ?? a.date).getTime()
-      const db = (b.effectiveDate ?? b.date).getTime()
+      const da = a.date.getTime()
+      const db = b.date.getTime()
       return da - db
     })
 
@@ -153,17 +153,15 @@ export async function GET(req: Request) {
   // the anchor date up to `from`.
   let openingBalance = startingBalance
   for (const t of allTransactions) {
-    const d = t.effectiveDate ?? t.date
-    if (!isBefore(d, from)) break
+    if (!isBefore(t.date, from)) break
     openingBalance += t.type === 'INCOME' ? t.amount : -t.amount
   }
 
-  // Index in-range transactions by effective date (or transaction date)
+  // Index in-range transactions by transaction date (when money moved)
   const txnsByDay = new Map<DayKey, ActualEvent[]>()
   for (const t of allTransactions) {
-    const d = t.effectiveDate ?? t.date
-    if (isBefore(d, from) || isAfter(d, to)) continue
-    const key = format(d, 'yyyy-MM-dd')
+    if (isBefore(t.date, from) || isAfter(t.date, to)) continue
+    const key = format(t.date, 'yyyy-MM-dd')
     if (!txnsByDay.has(key)) txnsByDay.set(key, [])
     txnsByDay.get(key)!.push({
       type: t.type,

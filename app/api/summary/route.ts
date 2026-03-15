@@ -48,7 +48,15 @@ export async function GET() {
 
   for (const item of budgetItems) {
     const freq = item.frequency as Frequency
-    if (!isActiveOn(item.startDate, item.endDate, now)) continue
+    if (!isActiveOn(item.startDate, item.endDate, now)) {
+      // Check for early payment — include item if a transaction exists in its first period
+      const firstPeriod = getCurrentPeriod(freq, item.startDate, item.startDate)
+      const hasEarlyPayment = item.transactions.some(t => {
+        const d = t.effectiveDate ?? t.date
+        return !isBefore(d, firstPeriod.start) && !isAfter(d, firstPeriod.end)
+      })
+      if (!hasEarlyPayment) continue
+    }
 
     monthlyBudget += toMonthly(item.amount, freq)
 
