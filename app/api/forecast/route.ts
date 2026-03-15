@@ -252,9 +252,13 @@ export async function GET(req: Request) {
         balance += t.type === 'INCOME' ? t.amount : -t.amount
       }
     } else {
+      // Apply any actual transactions that landed on future dates
+      for (const t of actualEvents) {
+        balance += t.type === 'INCOME' ? t.amount : -t.amount
+      }
       // Projected: use income schedules and budget allocations.
       // Deduplicate: if actual transactions cover a budget/income item
-      // in this period with the same amount, suppress the projection
+      // in this period, suppress the projection
       // (the actual transaction is already shown). Show both if amounts differ.
       for (const inc of incomes) {
         if (!inc.active) continue
