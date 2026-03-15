@@ -262,13 +262,14 @@ export async function GET(req: Request) {
         if (inc.endDate && isAfter(day, inc.endDate)) continue
         if (hitsDay(inc.frequency as Frequency, inc.startDate, day)) {
           const received = periodReceivedFor(inc.id, inc.frequency as Frequency, inc.startDate, day)
-          if (received > 0 && received === inc.amount) {
-            // Fully covered by actual transaction — skip projection, use actual for balance
-            balance += received
-          } else {
-            incomeEvents.push({ name: inc.name, amount: inc.amount })
-            balance += inc.amount
+          if (received >= inc.amount) {
+            // Fully covered by actual transaction — suppress projection
+            continue
           }
+          const projectedIncome = Math.max(0, inc.amount - received)
+          if (projectedIncome === 0) continue
+          incomeEvents.push({ name: inc.name, amount: projectedIncome })
+          balance += projectedIncome
         }
       }
       for (const item of budgetItems) {
@@ -277,13 +278,14 @@ export async function GET(req: Request) {
         if (item.endDate && isAfter(day, item.endDate)) continue
         if (hitsDay(item.frequency as Frequency, item.startDate, day)) {
           const spent = periodSpentFor(item.id, item.frequency as Frequency, item.startDate, day)
-          if (spent > 0 && spent === item.amount) {
-            // Fully covered by actual transaction — skip projection, use actual for balance
-            balance -= spent
-          } else {
-            budgetEvents.push({ id: item.id, name: item.name, category: item.category, amount: item.amount })
-            balance -= item.amount
+          if (spent >= item.amount) {
+            // Fully covered by actual transaction — suppress projection
+            continue
           }
+          const projectedAmount = Math.max(0, item.amount - spent)
+          if (projectedAmount === 0) continue
+          budgetEvents.push({ id: item.id, name: item.name, category: item.category, amount: projectedAmount })
+          balance -= projectedAmount
         }
       }
 
